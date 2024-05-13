@@ -26,27 +26,27 @@ License
     along with OpenFOAM.  If not, see <http://www.gnu.org/licenses/>.
 
 Class
-    Foam::deviceCsrMatrix
+    Foam::csrMatrix
 
 Description
-    deviceCsrMatrix is a general matrix class in which the coefficients are
-    stored in a single array.
+    csrMatrix is a general matrix class in which the coefficients are stored
+    in a single array.
 
     Addressing arrays must be supplied for the number of values per row and
     for teh values column index.
 
 SourceFiles
-    deviceCsrMatrix.H
-    deviceCsrMatrix.C
+    csrMatrix.H
+    csrMatrix.C
 
 \*---------------------------------------------------------------------------*/
 
-#ifndef Foam_deviceCsrMatrix_H
-#define Foam_deviceCsrMatrix_H
+#ifndef Foam_csrMatrix_H
+#define Foam_csrMatrix_H
 
 #include "Enum.H"
 #include "scalar.H"
-#include "devicelduMatrix.H"
+#include "lduMatrix.H"
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
@@ -54,64 +54,65 @@ namespace Foam
 {
 
 // Forward Declarations
-class deviceCsrMatrix;
+class csrMatrix;
 
 
 /*---------------------------------------------------------------------------*\
-                           Class deviceCsrMatrix Declaration
+                           Class csrMatrix Declaration
 \*---------------------------------------------------------------------------*/
 
-class deviceCsrMatrix
+class csrMatrix
 {
     // Private Data
 
     // Private methods
 
         //- Computation of the permutatrion array
-        virtual void computePermutation(const devicelduMatrix& lduMatrix);
+        virtual void computePermutation(const lduAddressing * addr);
 
         //- Computation of the permutatrion array
         virtual void computePermutation
         (
-            const devicelduMatrix& lduMatrix,
+            const lduAddressing * addr,
             const label diagIndexGlobal,
             const label lowOffGlobal,
             const label uppOffGlobal,
-            const deviceField<label>& extRows,
-            const deviceField<label>& extCols
+            const labelList& extRows,
+            const labelList& extCols
         );
 
 protected:
     //- Protected Data
 
         //- Coefficients
-        deviceField<Foam::scalar> *valuesPtr_;
+        scalarField *valuesPtr_;
 
         //- Numbers of non-zeros per row
-        deviceField<Foam::label> *ownerStartPtr_;
+        labelList *ownerStartPtr_;
         // int * ownerStartPtr_;
 
         //- Column indices array
-        deviceField<Foam::label> *colIndicesPtr_;
+        labelList *colIndicesPtr_;
 
         //- Permutation ldu2csr array
-        deviceField<Foam::label> *ldu2csrPerm_;
+        labelList *ldu2csrPerm_;
 
     //- Protected functions
         void initializeAddressing
         (
+            const int   nCells,
             const int   nInternalFaces,
             const int   totNnz,
             const int * const owner,
             const int * const neighbour,
                   int * tmpPerm,
                   int * rowIndTmp,
-                  int * colIndTmp,
-            const int   nCells = 0
+                  int * colIndTmp
         );
 
         void initializeAddressingExt
         (
+            const int   nCells,
             const int   nInternalFaces,
             const int   nnzExt,
             const int   totNnz,
@@ -121,29 +122,26 @@ protected:
             const int * const extCols,
                   int * tmpPerm,
                   int * rowIndTmp,
-                  int * colIndTmp,
-            const int   nCells = 0
+                  int * colIndTmp
         );
 
         void computeSorting
         (
             const int   totNnz,
-                int * tmpPerm,
-                int * rowIndTmp,
-                int * rowInd,
-                int * ldu2csr
+            const int * const tmpPerm,
+            const int * const rowIndTmp,
+                    int * rowInd,
+                    int * ldu2csr
         );
 
         void localToGlobalColIndices
         (
-            
+            const int   nRows,
             const int   nIntFaces,
+            const int   diagIndexGlobal,
             const int   lowOffGlobal,
             const int   uppOffGlobal,
-                  int * colIndicesGlobal,
-            const int   nRows = 0,
-            const int   diagIndexGlobal = 0
-
+                  int * colIndicesGlobal
         );
 
         void applyAddressingPermutation
@@ -159,25 +157,24 @@ protected:
 
         void initializeValue
         (
-            
+            const int   nCells,
             const int   nIntFaces,
+            const double * const diag,
             const double * const upper,
             const double * const lower,
-                  double * valuesTmp,
-                  const int   nCells = 0,
-                  const double * const diag = nullptr
+                  double * valuesTmp                  
         );
 
         void initializeValueExt
         (
+            const int      nCells,
             const int      nIntFaces,
             const int      nnzExt,
+            const double * const diag,
             const double * const upper,
             const double * const lower,
             const double * const extValue,
-                  double * valuesTmp,
-            const int      nCells = 0,
-            const double * const diag = nullptr
+                  double * valuesTmp
         );
 
         void applyValuePermutation
@@ -195,27 +192,27 @@ public:
     //- Static Data
 
         // Declare name of the class and its debug switch
-        ClassName("deviceCsrMatrix");
+        ClassName("csrMatrix");
 
     //- Constructors
 
         //- Construct default.
         //  The coefficients are initialized empty.
-        deviceCsrMatrix();
+        csrMatrix();
 
         //- Construct as copy
-        deviceCsrMatrix(const deviceCsrMatrix& A);
+        csrMatrix(const csrMatrix& A);
 
         //- Construct as copy or re-use as specified.
-        deviceCsrMatrix(deviceCsrMatrix& A, bool reuse);
+        csrMatrix(csrMatrix& A, bool reuse);
 
         //- Construct given an LDU addressed mesh and an Istream
         //- from which the coefficients are read
-        // devicelduMatrix(const lduMesh&, Istream&);
+        // lduMatrix(const lduMesh&, Istream&);
 
 
     //- Destructor
-        ~deviceCsrMatrix() = default;
+        ~csrMatrix() = default;
 
 
     //- Member Functions
@@ -223,19 +220,19 @@ public:
         //- Access to addressing
 
             //- Return vector of the ownerStart
-            const deviceField<label>& ownerStart() const noexcept
+            const labelList& ownerStart() const noexcept
             {
                 return *ownerStartPtr_;
             }
 
             //- Return the column index
-            const deviceField<label>& colIndices() const noexcept
+            const labelList& colIndices() const noexcept
             {
                 return *colIndicesPtr_;
             }
 
             //- Return the column index
-            const deviceField<label>& ldu2csrPerm() const noexcept
+            const labelList& ldu2csrPerm() const noexcept
             {
                 return *ldu2csrPerm_;
             }
@@ -247,7 +244,7 @@ public:
             }
 
         //- Access to coefficients
-            const deviceField<scalar>& values() const;
+            const scalarField& values() const;
 
             virtual const scalar* diagValuesPtr() const
             {
@@ -262,25 +259,25 @@ public:
         //- Operations
 
             //- Apply permutation from LDU to CSR
-            virtual void applyPermutation(const devicelduMatrix& lduMatrix);
+            virtual void applyPermutation(const lduMatrix& lduMatrix);
 
             //- Apply permutation from LDU to CSR considering the interface values
             virtual void applyPermutation
             (
-                const devicelduMatrix& lduMatrix,
+                const lduMatrix& lduMatrix,
                 const label diagIndexGlobal,
                 const label lowOffGlobal,
                 const label uppOffGlobal,
-                const deviceField<label>& extRows,
-                const deviceField<label>& extCols,
-                const deviceField<scalar>& extVals
+                const labelList& extRows,
+                const labelList& extCols,
+                const scalarField& extVals
             );
 
             //- Apply permutation from LDU to CSR considering the interface values
             virtual void applyPermutation
             (
-                const devicelduMatrix& lduMatrix,
-                const deviceField<scalar>& extVals
+                const lduMatrix& lduMatrix,
+                const scalarField& extVals
             );
 
             //- Deallocate useless addressing pointer

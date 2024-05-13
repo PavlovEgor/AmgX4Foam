@@ -26,32 +26,15 @@ License
 
 \*---------------------------------------------------------------------------*/
 
-#include "deviceCsrMatrix.H"
+#include "csrMatrix.H"
 
 // * * * * * * * * * * * * * * Static Data Members * * * * * * * * * * * * * //
 
-/* namespace Foam
-{
-    defineTypeNameAndDebug(deviceCsrMatrix, 1);
-} */
-
-
-/* // const Foam::scalar Foam::deviceCsrMatrix::defaultTolerance = 1e-6;
-const Foam::Enum
-<
-    Foam::deviceCsrMatrix::normTypes
->
-Foam::deviceCsrMatrixnormTypesNames_
-({
-    { normTypes::NO_NORM, "none" },
-    { normTypes::DEFAULT_NORM, "default" },
-    { normTypes::L1_SCALED_NORM, "L1_scaled" },
-}); */
 
 
 // * * * * * * * * * * * * * * * Constructors * * * * * * * * * * * * * * * //
 
-Foam::deviceCsrMatrix::deviceCsrMatrix()
+Foam::csrMatrix::csrMatrix()
 :
     valuesPtr_(nullptr),
     ownerStartPtr_(nullptr),
@@ -59,7 +42,7 @@ Foam::deviceCsrMatrix::deviceCsrMatrix()
     ldu2csrPerm_(nullptr)
 {}
 
-Foam::deviceCsrMatrix::deviceCsrMatrix(const deviceCsrMatrix& A)
+Foam::csrMatrix::csrMatrix(const csrMatrix& A)
 :
     valuesPtr_(nullptr),
     ownerStartPtr_(nullptr),
@@ -68,27 +51,27 @@ Foam::deviceCsrMatrix::deviceCsrMatrix(const deviceCsrMatrix& A)
 {
     if (A.valuesPtr_)
     {
-        valuesPtr_ = new deviceField<Foam::scalar>(*(A.valuesPtr_));
+        valuesPtr_ = new scalarField(*(A.valuesPtr_));
     }
 
     if (A.ownerStartPtr_)
     {
-        ownerStartPtr_ = new deviceField<Foam::label>(*(A.ownerStartPtr_));
+        ownerStartPtr_ = new labelList(*(A.ownerStartPtr_));
     }
 
     if (A.colIndicesPtr_)
     {
-        colIndicesPtr_ = new deviceField<Foam::label>(*(A.colIndicesPtr_));
+        colIndicesPtr_ = new labelList(*(A.colIndicesPtr_));
     }
 
     if (A.ldu2csrPerm_)
     {
-        ldu2csrPerm_ = new deviceField<Foam::label>(*(A.ldu2csrPerm_));
+        ldu2csrPerm_ = new labelList(*(A.ldu2csrPerm_));
     }
 }
 
 
-Foam::deviceCsrMatrix::deviceCsrMatrix(deviceCsrMatrix& A, bool reuse)
+Foam::csrMatrix::csrMatrix(csrMatrix& A, bool reuse)
 :
     valuesPtr_(nullptr),
     ownerStartPtr_(nullptr),
@@ -125,29 +108,29 @@ Foam::deviceCsrMatrix::deviceCsrMatrix(deviceCsrMatrix& A, bool reuse)
     {
         if (A.valuesPtr_)
         {
-            valuesPtr_ = new deviceField<Foam::scalar>(*(A.valuesPtr_));
+            valuesPtr_ = new scalarField(*(A.valuesPtr_));
         }
 
         if (A.ownerStartPtr_)
         {
-            ownerStartPtr_ = new deviceField<Foam::label>(*(A.ownerStartPtr_));
+            ownerStartPtr_ = new labelList(*(A.ownerStartPtr_));
         }
 
         if (A.colIndicesPtr_)
         {
-            colIndicesPtr_ = new deviceField<Foam::label>(*(A.colIndicesPtr_));
+            colIndicesPtr_ = new labelList(*(A.colIndicesPtr_));
         }
 
         if (A.ldu2csrPerm_)
         {
-            ldu2csrPerm_ = new deviceField<Foam::label>(*(A.ldu2csrPerm_));
+            ldu2csrPerm_ = new labelList(*(A.ldu2csrPerm_));
         }
     }
 }
 
 // * * * * * * * * * * * *  Public Member Functions * * * * * * * * * * * *  //
 
-void Foam::deviceCsrMatrix::finalize()
+void Foam::csrMatrix::finalize()
 {
     if (valuesPtr_)
     {
@@ -171,7 +154,7 @@ void Foam::deviceCsrMatrix::finalize()
 }
 
 
-const Foam::deviceField<Foam::scalar>& Foam::deviceCsrMatrix::values() const
+const Foam::scalarField& Foam::csrMatrix::values() const
 {
     if (!valuesPtr_)
     {
@@ -187,7 +170,7 @@ const Foam::deviceField<Foam::scalar>& Foam::deviceCsrMatrix::values() const
 // * * * * * * * * * * * * * * * * Operations * * * * * * * * * * * * * * * //
 
 //- Deallocate useless addressing pointer
-void Foam::deviceCsrMatrix::clearAddressing()
+void Foam::csrMatrix::clearAddressing()
 {
     if (ownerStartPtr_)
     {
@@ -203,37 +186,37 @@ void Foam::deviceCsrMatrix::clearAddressing()
 
 
 //- Find permutation array and new addressing vectors (no interface)
-void Foam::deviceCsrMatrix::computePermutation(const devicelduMatrix& lduMatrix)
+void Foam::csrMatrix::computePermutation(const lduAddressing * addr)
 {
-    const label nCells = lduMatrix.mesh().nCells();
-    const label nIntFaces = lduMatrix.mesh().nInternalFaces();
+    const labelList& own = addr->lowerAddr();
+    const labelList& neigh = addr->upperAddr();
+    
+    const label nCells = addr->size();
+    const label nIntFaces = own.size();
     const label totNnz = nCells + 2*nIntFaces;
 
-    const deviceField<Foam::label>& own = lduMatrix.mesh().owner();
-    const deviceField<Foam::label>& neigh = lduMatrix.mesh().neighbour();
+    ownerStartPtr_ = new labelList(nCells+1, Foam::Zero);
+    ldu2csrPerm_ = new labelList(totNnz);
+    colIndicesPtr_ = new labelList(totNnz);
 
-    ownerStartPtr_ = new deviceField<Foam::label>(nCells+1, Foam::Zero);
-    ldu2csrPerm_ = new deviceField<Foam::label>(totNnz);
-    colIndicesPtr_ = new deviceField<Foam::label>(totNnz);
-
-    deviceField<Foam::label> rowIndices(totNnz);
-    deviceField<Foam::label> tmpPerm(totNnz);
-    deviceField<Foam::label> rowindicesTmp(totNnz);
-    deviceField<Foam::label> colindicesTmp(totNnz);
+    labelList rowIndices(totNnz);
+    labelList tmpPerm(totNnz);
+    labelList rowindicesTmp(totNnz);
+    labelList colindicesTmp(totNnz);
 
     // Initialize: tmpPerm = [0, 1, ... totNnz-1]
     //             rowindicesTmp = [0, ... nCells-1, (owner), (neighbour)]
     //             colindicesTmp = [0, ... nCells-1, (neighbour), (owner)]
     initializeAddressing
     (
+        nCells,
         nIntFaces,
         totNnz,
         own.cdata(),
         neigh.cdata(),
         tmpPerm.data(),
         rowindicesTmp.data(),
-        colindicesTmp.data(),
-        nCells
+        colindicesTmp.data()
     );
 
     // Compute sorting to obtain permutation
@@ -260,38 +243,39 @@ void Foam::deviceCsrMatrix::computePermutation(const devicelduMatrix& lduMatrix)
 }
 
 //- Find permutation array and new addressing vectors
-void Foam::deviceCsrMatrix::computePermutation
+void Foam::csrMatrix::computePermutation
 (
-    const devicelduMatrix& lduMatrix,
+    const lduAddressing * addr,
     const label diagIndexGlobal,
     const label lowOffGlobal,
     const label uppOffGlobal,
-    const deviceField<label>& extRows,
-    const deviceField<label>& extCols
+    const labelList& extRows,
+    const labelList& extCols
 )
 {
-    const label nCells = lduMatrix.mesh().nCells();
-    const label nIntFaces = lduMatrix.mesh().nInternalFaces();
+    const labelList& own = addr->lowerAddr();
+    const labelList& neigh = addr->upperAddr();
+    
+    const label nCells = addr->size();
+    const label nIntFaces = own.size();
     const label nnzExt = extRows.size();
     const label totNnz = nCells + 2*nIntFaces + nnzExt;
 
-    const deviceField<Foam::label>& own = lduMatrix.mesh().owner();
-    const deviceField<Foam::label>& neigh = lduMatrix.mesh().neighbour();
+    ownerStartPtr_ = new labelList(nCells+1, Foam::Zero);
+    ldu2csrPerm_ = new labelList(totNnz);
+    colIndicesPtr_ = new labelList(totNnz);
 
-    ownerStartPtr_ = new deviceField<Foam::label>(nCells+1, Foam::Zero);
-    ldu2csrPerm_ = new deviceField<Foam::label>(totNnz);
-    colIndicesPtr_ = new deviceField<Foam::label>(totNnz);
-
-    deviceField<Foam::label> rowIndices(totNnz);
-    deviceField<Foam::label> tmpPerm(totNnz);
-    deviceField<Foam::label> rowindicesTmp(totNnz);
-    deviceField<Foam::label> colindicesTmp(totNnz);
+    labelList rowIndices(totNnz);
+    labelList tmpPerm(totNnz);
+    labelList rowindicesTmp(totNnz);
+    labelList colindicesTmp(totNnz);
 
     // Initialize: tmpPerm = [0, 1, ... totNnz-1]
     //             rowindicesTmp = [0, ... nCells-1, (owner), (neighbour), (extrows)]
     //             colindicesTmp = [0, ... nCells-1, (neighbour), (owner), (extcols)]
     initializeAddressingExt
     (
+        nCells,
         nIntFaces,
         nnzExt,
         totNnz,
@@ -301,8 +285,7 @@ void Foam::deviceCsrMatrix::computePermutation
         extCols.cdata(),
         tmpPerm.data(),
         rowindicesTmp.data(),
-        colindicesTmp.data(),
-        nCells
+        colindicesTmp.data()
     );
 
     // Compute sorting to obtain permutation
@@ -318,12 +301,12 @@ void Foam::deviceCsrMatrix::computePermutation
     // Make column indices from local to global
     localToGlobalColIndices
     (
+        nCells,
         nIntFaces,
+        diagIndexGlobal,
         lowOffGlobal,
         uppOffGlobal,
-        colindicesTmp.data(),
-        nCells,
-        diagIndexGlobal
+        colindicesTmp.data()        
     );
 
     // Apply permutation vector to find colIndices + compute ownerStart
@@ -340,38 +323,38 @@ void Foam::deviceCsrMatrix::computePermutation
 }
 
 //- Apply permutation to LDU values (no permutation)
-void Foam::deviceCsrMatrix::applyPermutation(const devicelduMatrix& lduMatrix)
+void Foam::csrMatrix::applyPermutation(const lduMatrix& lduMatrix)
 {
     // Verify that the permutation has already been computed
     if(!ldu2csrPerm_)
     {
-        computePermutation(lduMatrix);
+        computePermutation(&(lduMatrix.lduAddr()));
     }
 
-    label nIntFaces = lduMatrix.mesh().nInternalFaces();
-    label nCells = lduMatrix.mesh().nCells();
-    label totNnz = nCells + 2*nIntFaces;
+    const scalarField& diag = lduMatrix.diag();
+    const scalarField& upper = lduMatrix.upper();
+    const scalarField& lower = lduMatrix.lower();
 
-    const deviceField<Foam::scalar>& diag = lduMatrix.diag();
-    const deviceField<Foam::scalar>& upper = lduMatrix.upper();
-    const deviceField<Foam::scalar>& lower = lduMatrix.lower();
+    label nCells = diag.size();
+    label nIntFaces = upper.size();
+    label totNnz = nCells + 2*nIntFaces;
 
     if(!valuesPtr_)
     {
-        valuesPtr_ = new deviceField<Foam::scalar>(totNnz);
+        valuesPtr_ = new scalarField(totNnz);
     }
 
     // Initialize valuesTmp = [(diag), (upper), (lower)]
-    deviceField<Foam::scalar> valuesTmp(totNnz);
+    scalarField valuesTmp(totNnz);
 
     initializeValue
     (
+        nCells,
         nIntFaces,
+        diag.cdata(),
         upper.cdata(),
         lower.cdata(),
-        valuesTmp.data(),
-        nCells,
-        diag.cdata()
+        valuesTmp.data()
     );
 
     // Apply permutation
@@ -385,22 +368,22 @@ void Foam::deviceCsrMatrix::applyPermutation(const devicelduMatrix& lduMatrix)
 }
 
 //- Apply permutation from LDU to CSR considering the interface values
-void Foam::deviceCsrMatrix:: applyPermutation
+void Foam::csrMatrix:: applyPermutation
 (
-    const devicelduMatrix& lduMatrix,
+    const lduMatrix& lduMatrix,
     const label diagIndexGlobal,
     const label lowOffGlobal,
     const label uppOffGlobal,
-    const deviceField<label>& extRows,
-    const deviceField<label>& extCols,
-    const deviceField<scalar>& extVals
+    const labelList& extRows,
+    const labelList& extCols,
+    const scalarField& extVals
 )
 {
     // Verify that the permutation has already been computed
     if(!ldu2csrPerm_)
     {
         computePermutation(
-            lduMatrix,
+            &(lduMatrix.lduAddr()),
             diagIndexGlobal,
             lowOffGlobal,
             uppOffGlobal,
@@ -409,33 +392,33 @@ void Foam::deviceCsrMatrix:: applyPermutation
         );
     }
 
-    label nIntFaces = lduMatrix.mesh().nInternalFaces();
-    label nCells = lduMatrix.mesh().nCells();
+    const scalarField& diag = lduMatrix.diag();
+    const scalarField& upper = lduMatrix.upper();
+    const scalarField& lower = lduMatrix.lower();
+
+    label nIntFaces = upper.size();
+    label nCells = diag.size();
     label nnzExt = extVals.size();
     label totNnz = nCells + 2*nIntFaces + nnzExt;
 
-    const deviceField<Foam::scalar>& diag = lduMatrix.diag();
-    const deviceField<Foam::scalar>& upper = lduMatrix.upper();
-    const deviceField<Foam::scalar>& lower = lduMatrix.lower();
-
     if(!valuesPtr_)
     {
-        valuesPtr_ = new deviceField<Foam::scalar>(totNnz);
+        valuesPtr_ = new scalarField(totNnz);
     }
 
     // Initialize valuesTmp = [(diag), (upper), (lower), (extValues)]
-    deviceField<Foam::scalar> valuesTmp(totNnz);
+    scalarField valuesTmp(totNnz);
 
     initializeValueExt
     (
+        nCells,
         nIntFaces,
         nnzExt,
+        diag.cdata(),
         upper.cdata(),
         lower.cdata(),
         extVals.cdata(),
-        valuesTmp.data(),
-        nCells,
-        diag.cdata()
+        valuesTmp.data()
     );
 
     // Apply permutation
@@ -449,39 +432,39 @@ void Foam::deviceCsrMatrix:: applyPermutation
 }
 
 //- Apply permutation from LDU to CSR considering the interface values
-void Foam::deviceCsrMatrix:: applyPermutation
+void Foam::csrMatrix:: applyPermutation
 (
-    const devicelduMatrix& lduMatrix,
-    const deviceField<scalar>& extVals
+    const lduMatrix& lduMatrix,
+    const scalarField& extVals
 )
 {
-    label nIntFaces = lduMatrix.mesh().nInternalFaces();
-    label nCells = lduMatrix.mesh().nCells();
+    const scalarField& diag = lduMatrix.diag();
+    const scalarField& upper = lduMatrix.upper();
+    const scalarField& lower = lduMatrix.lower();
+
+    label nIntFaces = upper.size();
+    label nCells = diag.size();
     label nnzExt = extVals.size();
     label totNnz = nCells + 2*nIntFaces + nnzExt;
 
-    const deviceField<Foam::scalar>& diag = lduMatrix.diag();
-    const deviceField<Foam::scalar>& upper = lduMatrix.upper();
-    const deviceField<Foam::scalar>& lower = lduMatrix.lower();
-
     if(!valuesPtr_)
     {
-        valuesPtr_ = new deviceField<Foam::scalar>(totNnz);
+        valuesPtr_ = new scalarField(totNnz);
     }
 
     // Initialize valuesTmp = [(diag), (upper), (lower), (extValues)]
-    deviceField<Foam::scalar> valuesTmp(totNnz);
+    scalarField valuesTmp(totNnz);
 
     initializeValueExt
     (
+        nCells,
         nIntFaces,
         nnzExt,
+        diag.cdata(),
         upper.cdata(),
         lower.cdata(),
         extVals.cdata(),
-        valuesTmp.data(),
-        nCells,
-        diag.cdata()
+        valuesTmp.data()
     );
 
     // Apply permutation
@@ -493,8 +476,6 @@ void Foam::deviceCsrMatrix:: applyPermutation
         valuesPtr_->data()
     );
 }
-
-
 
 // * * * * * * * * * * * * * Explicit instantiations  * * * * * * * * * * * //
 

@@ -29,7 +29,7 @@ License
 
 // ************************************************************************* //
 
-#include "deviceCsrMatrix.C"
+#include "csrMatrix.C"
 #include "deviceField.H"
 #include "kernels.H"
 #include "global.cuh"
@@ -243,16 +243,16 @@ void cudaInitializeValueExt
 
 // * * * * * * * * * * * * * *  Wrapper functions * * * * * * * * * * * * * * //
 
-void Foam::deviceCsrMatrix::initializeAddressing
+void Foam::csrMatrix::initializeAddressing
 (
+    const int   nCells,
     const int   nInternalFaces,
     const int   totNnz,
     const int * const owner,
     const int * const neighbour,
           int * tmpPerm,
           int * rowIndTmp,
-          int * colIndTmp,
-    const int   nCells
+          int * colIndTmp
 )
 {
     // Initialize tmpPerm = [0, 1, ... totNnz-1]
@@ -294,8 +294,9 @@ void Foam::deviceCsrMatrix::initializeAddressing
 }
 
 
-void Foam::deviceCsrMatrix::initializeAddressingExt
+void Foam::csrMatrix::initializeAddressingExt
 (
+    const int   nCells,
     const int   nInternalFaces,
     const int   nnzExt,
     const int   totNnz,
@@ -305,8 +306,7 @@ void Foam::deviceCsrMatrix::initializeAddressingExt
     const int * const extCols,
           int * tmpPerm,
           int * rowIndTmp,
-          int * colIndTmp,
-    const int   nCells
+          int * colIndTmp
 )
 {
     // Initialize tmpPerm = [0, 1, ... totNnz-1]
@@ -343,7 +343,7 @@ void Foam::deviceCsrMatrix::initializeAddressingExt
 }
 
 
-void Foam::deviceCsrMatrix::computeSorting
+void Foam::csrMatrix::computeSorting
 (
     const int   totNnz,
           int * tmpPerm,
@@ -374,14 +374,14 @@ void Foam::deviceCsrMatrix::computeSorting
 }
 
 
-void Foam::deviceCsrMatrix::localToGlobalColIndices
+void Foam::csrMatrix::localToGlobalColIndices
 (
+    const int nRows,
     const int nIntFaces,
+    const int diagIndexGlobal,
     const int lowOffGlobal,
     const int uppOffGlobal,
-    int *colIndicesGlobal,
-    const int nRows,
-    const int diagIndexGlobal
+          int *colIndicesGlobal    
 )
 {
     int numBlocks;
@@ -414,7 +414,7 @@ void Foam::deviceCsrMatrix::localToGlobalColIndices
 }
 
 
-void Foam::deviceCsrMatrix::applyAddressingPermutation
+void Foam::csrMatrix::applyAddressingPermutation
 (
     const int   nCells,
     const int   totNnz,
@@ -468,14 +468,14 @@ void Foam::deviceCsrMatrix::applyAddressingPermutation
 }
 
 
-void Foam::deviceCsrMatrix::initializeValue
+void Foam::csrMatrix::initializeValue
 (
+    const int   nCells,
     const int   nIntFaces,
+    const double * const diag,
     const double * const upper,
     const double * const lower,
-          double * valuesTmp,
-    const int   nCells,
-    const double * const diag
+          double * valuesTmp    
 )
 {
     int numBlocks;
@@ -509,17 +509,16 @@ void Foam::deviceCsrMatrix::initializeValue
 }
 
 
-void Foam::deviceCsrMatrix::initializeValueExt
+void Foam::csrMatrix::initializeValueExt
 (
+    const int   nCells,
     const int   nIntFaces,
     const int   nnzExt,
+    const double * const diag,
     const double * const upper,
     const double * const lower,
     const double * const extValue,
-          double * valuesTmp,
-    const int   nCells,
-    const double * const diag
-
+          double * valuesTmp
 )
 {
     // Initialize valuesTmp = [(diag), (upper), (lower), (extValues)]
@@ -550,7 +549,7 @@ void Foam::deviceCsrMatrix::initializeValueExt
 }
 
 
-void Foam::deviceCsrMatrix::applyValuePermutation
+void Foam::csrMatrix::applyValuePermutation
 (
     const int   totNnz,
     const int * const ldu2csr,

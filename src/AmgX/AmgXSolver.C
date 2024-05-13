@@ -27,370 +27,334 @@ License
 
 \*---------------------------------------------------------------------------*/
 
-#ifdef have_amgx
-
 #include "AmgXSolver.H"
-#include "deviceField.H"
-#include "global.cuh"
+#include "direction.H"
+#include "AmgXLinearSolverContext.H"
+#include "linearSolverContextTable.H"
+// #include "AmgXWrapper.H"
 
-#include "PstreamGlobals.H"
+#include "csrMatrix.H"
 
-// initialize AmgXSolver::count to 0
-int Foam::AmgXSolver::count = 0;
+#include "globalIndex.H"
 
-// initialize AmgXSolver::rsrc to nullptr;
-AMGX_resources_handle Foam::AmgXSolver::rsrc = nullptr;
+// #include <iostream>
+// #include <fstream>
 
+// * * * * * * * * * * * * * * Static Data Members * * * * * * * * * * * * * //
+
+namespace Foam
+{
+    defineTypeNameAndDebug(AmgXSolver, 0);
+
+    lduMatrix::solver::addsymMatrixConstructorToTable<AmgXSolver>
+        addAmgXSolverSymMatrixConstructorToTable_;
+
+    lduMatrix::solver::addasymMatrixConstructorToTable<AmgXSolver>
+        addAmgXSolverAsymMatrixConstructorToTable_;
+}
 
 // * * * * * * * * * * * * * * * * Constructors  * * * * * * * * * * * * * * //
 
-/* \implements AmgXSolver::AmgXSolver */
-/*Foam::AmgXSolver::AmgXSolver
+Foam::AmgXSolver::AmgXSolver
 (
-    const MPI_Comm &comm,
-    const std::string &modeStr,
-    const std::string &cfgFile
+    const word& fieldName,
+    const lduMatrix& matrix,
+    const FieldField<Field, scalar>& interfaceBouCoeffs,
+    const FieldField<Field, scalar>& interfaceIntCoeffs,
+    const lduInterfaceFieldPtrsList& interfaces,
+    const dictionary& solverControls
 )
+:
+    lduMatrix::solver
+    (
+        fieldName,
+        matrix,
+        interfaceBouCoeffs,
+        interfaceIntCoeffs,
+        interfaces,
+        solverControls
+    ),
+    eqName_(fieldName)
+{}
+
+
+// * * * * * * * * * * * * * * * Member Functions  * * * * * * * * * * * * * //
+
+//- construct the matrix for AmgX
+/*void Foam::AmgXSolver::buildAndApplyMatrixPermutation
+(
+    deviceCsrMatrix* csrMatrix,
+    label& nRowsGlobal
+) const
 {
-    initialize(comm, modeStr, cfgFile);
+    const lduInterfacePtrsList interfaces(this->matrix_.mesh().openFoamMesh().interfaces());
+
+    // Local degrees-of-freedom i.e. number of local rows
+    const label nLocalRows = this->matrix_.mesh().nCells();
+    label nRowsLocal = nLocalRows;
+    nRowsGlobal = returnReduce(nRowsLocal, sumOp<label>());
+
+    // Number of internal faces (connectivity)
+    const label nIntFaces = this->matrix_.mesh().nInternalFaces();
+
+    const globalIndex globalNumbering(nLocalRows);
+
+    const label diagIndexGlobal = globalNumbering.toGlobal(0);
+    const label firstLowerInd = this->matrix_.mesh().openFoamMesh().owner()[0]; //lower.cdata()[0];
+    label lowOffGlobal = globalNumbering.toGlobal(firstLowerInd) - firstLowerInd;
+    const label firstUpperInd = this->matrix_.mesh().openFoamMesh().neighbour()[0]; // upper.cdata()[0];
+    label uppOffGlobal = globalNumbering.toGlobal(firstUpperInd) - firstUpperInd;
+
+    labelList globalCells
+    (
+        identity
+        (
+            globalNumbering.localSize(),
+            globalNumbering.localStart()
+        )
+    );
+
+    // Connections to neighbouring processors
+    const label nReq = Pstream::nRequests();
+
+    label nProcValues = 0;
+
+    // Initialise transfer of global cells
+    forAll(interfaces, patchi)
+    {
+        if (interfaces.set(patchi))
+        {
+            nProcValues += interfaces[patchi].faceCells().size(); //lduAddr.patchAddr(patchi).size();
+
+            interfaces[patchi].initInternalFieldTransfer
+            (
+                Pstream::commsTypes::nonBlocking,
+                globalCells
+            );
+        }
+    }
+
+    if (Pstream::parRun())
+    {
+        Pstream::waitRequests(nReq);
+    }
+
+    deviceField<label> procRows(nProcValues, 0);
+    deviceField<label> procCols(nProcValues, 0);
+    deviceField<scalar> procVals(nProcValues, Foam::Zero);
+    nProcValues = 0;
+
+    forAll(interfaces, patchi)
+    {
+        if (interfaces.set(patchi))
+        {
+            // Processor-local values
+            const label len = interfaces[patchi].faceCells().size();
+            const deviceField<label> faceCells(len, interfaces[patchi].faceCells().cdata());
+            const deviceField<scalar>& bCoeffs = this->interfaceBouCoeffs_[patchi];
+
+            labelList nbrCells
+            (
+                interfaces[patchi].internalFieldTransfer
+                (
+                    Pstream::commsTypes::nonBlocking,
+                    globalCells
+                )
+            );
+
+            if (faceCells.size() != nbrCells.size())
+            {
+                FatalErrorInFunction
+                    << "Mismatch in interface sizes (AMI?)" << nl
+                    << "Have " << faceCells.size() << " != "
+                    << nbrCells.size() << nl
+                    << exit(FatalError);
+            }
+
+            procRows.copy(faceCells, nProcValues, 0);
+            procCols.copyIn(nbrCells, len, nProcValues);
+            procVals.copy(bCoeffs, nProcValues, 0);
+
+            nProcValues += len;
+        }
+    }
+
+    procVals.negate();  // Change sign for entire field (see previous note)
+
+    csrMatrix->applyPermutation
+    (
+        this->matrix_,
+        diagIndexGlobal,
+        lowOffGlobal,
+        uppOffGlobal,
+        procRows,
+        procCols,
+        procVals
+    );
+
+    DebugInfo<< "Converted LDU matrix to CSR format" << nl;
+
+}
+
+
+//- construct the matrix for AmgX
+void Foam::AmgXSolver::applyMatrixPermutation
+(
+    deviceCsrMatrix* csrMatrix,
+    label& nRowsGlobal
+) const
+{
+    const UPtrList<const devicelduInterfaceField>& interfaces = this->interfaces_;
+
+    // Local degrees-of-freedom i.e. number of local rows
+    const label nLocalRows = this->matrix_.mesh().nCells();
+    label nRowsLocal = nLocalRows;
+    nRowsGlobal = returnReduce(nRowsLocal, sumOp<label>());
+
+    //- Number of internal faces (connectivity)
+    const label nIntFaces = this->matrix_.mesh().nInternalFaces();
+
+    //- Connections to neighbouring processors
+    const label nReq = Pstream::nRequests();
+
+    label nProcValues = 0;
+
+    // Initialise transfer of global cells
+    forAll(interfaces, patchi)
+    {
+        if (interfaces.set(patchi)) nProcValues += this->interfaceBouCoeffs_[patchi].size();
+    }
+
+    if (Pstream::parRun())
+    {
+        Pstream::waitRequests(nReq);
+    }
+
+    deviceField<scalar> procVals(nProcValues, Foam::Zero);
+    nProcValues = 0;
+
+    forAll(interfaces, patchi)
+    {
+        if (interfaces.set(patchi))
+        {
+            //- Processor-local values
+            const deviceField<scalar>& bCoeffs = this->interfaceBouCoeffs_[patchi];
+            const label len = bCoeffs.size();
+
+            procVals.copy(bCoeffs, nProcValues, 0);
+
+            nProcValues += len;
+        }
+    }
+
+    procVals.negate();  // Change sign for entire field (see previous note)
+
+    csrMatrix->applyPermutation
+    (
+        this->matrix_,
+        procVals
+    );
+
+    DebugInfo<< "Converted LDU matrix values to CSR format" << nl;
+
 }*/
 
-// * * * * * * * * * * * * * * * Destructor * * * * * * * * * * * * * * * * * //
 
-/* \implements AmgXSolver::~AmgXSolver */
-Foam::AmgXSolver::~AmgXSolver()
-{
-    if (isInitialised)
-        finalize();
-}
-
-// * * * * * * * * * * * * * * * Utilities * * * * * * * * * * * * * * * * * * //
-
-void checkAmgXerror(AMGX_RC code, Foam::word function)
-{
-    char buff[256];
-    AMGX_get_error_string(code, buff, 256);
-    if(code != AMGX_RC_OK){
-        AMGX_get_error_string(code, buff, 256);
-        Foam::Info << function << "returned: " << buff << Foam::nl;
-    }
-}
-
-// * * * * * * * * * * * * * * Member functions  * * * * * * * * * * * * * * * //
-
-/* \implements AmgXSolver::initialize*/
-void Foam::AmgXSolver::initialize(
-    const word &modeStr,
-    const string &configStr
-)
-{
-    //- increase the number of AmgXSolver instances
-    count += 1;
-
-    //- get the mode of AmgX solver
-    setMode(modeStr);
-
-    initAmgX(configStr);
-
-    isInitialised = true;
-}
-
-/* \implements AmgXSolver::initialize*/
-void Foam::AmgXSolver::initialize(
-    const label &commId,
-    const word &modeStr,
-    const string &configStr
-)
-{
-    //- increase the number of AmgXSolver instances
-    count += 1;
-
-    //- get the mode of AmgX solver
-    setMode(modeStr);
-
-    //- initialize communicators and corresponding information
-    initComms(commId);
-
-    initAmgX(configStr);
-
-    isInitialised = true;
-}
-
-/* \implements AmgXSolver::setMode */
-void Foam::AmgXSolver::setMode(const word &modeStr)
-{
-    if (modeStr == "dDDI")
-        mode = AMGX_mode_dDDI;
-    else if (modeStr == "dDFI")
-        mode = AMGX_mode_dDFI;
-    else if (modeStr == "dFFI")
-        mode = AMGX_mode_dFFI;
-    else // NOTA: non ho usato la funzione SETERRQ perchè non ho capito dove è implementata e non ho MPI in questo caso
-        Info << modeStr.c_str() << " is not an available mode! Available modes are: dDDI, dDFI, dFFI." <<  nl;
-}
-
-
-/* \implements AmgXSolver::initComms */
-void Foam::AmgXSolver::initComms(const int &commId)
-{
-    //- duplicate the communicator
-    gpuWorld_ = commId;
-
-    //- get size and rank for communicator
-    gpuWorldSize_ = Pstream::nProcs(gpuWorld_);
-    myGpuWorldRank_ = Pstream::myProcNo(gpuWorld_);
-
-    cudaGetDeviceCount(&nDevs_);
-    cudaGetDevice(&devID_);
-}
-
-
-/* \implements AmgXSolver::initAmgX */
-void Foam::AmgXSolver::initAmgX(const string &configStr)
-{
-    //- only the first instance (AmgX solver) is in charge of initializing AmgX
-    if (count == 1)
-    {
-        //- initialize AmgX
-        AMGX_SAFE_CALL(AMGX_initialize());
-
-        //- only the master process can output something on the screen
-        AMGX_SAFE_CALL(AMGX_register_print_callback(
-                    [](const char *msg, int length)->void
-                    {Info << msg << nl;}));
-
-        //- let AmgX to handle errors returned
-        AMGX_SAFE_CALL(AMGX_install_signal_handler());
-    }
-
-    //- create an AmgX configure object
-    if(configStr.contains("system"))
-    {
-        AMGX_SAFE_CALL(AMGX_config_create_from_file(&cfg, configStr.c_str()));
-    }
-    else
-    {
-        AMGX_SAFE_CALL(AMGX_config_create(&cfg, configStr.c_str()));
-    }
-
-    //- let AmgX handle returned error codes internally
-    AMGX_SAFE_CALL(AMGX_config_add_parameters(&cfg, "exception_handling=1"));
-
-    //- create an AmgX resource object, only the first instance is in charge
-    if (count == 1)
-    {
-        if (!Pstream::parRun())
-        {
-            AMGX_resources_create_simple(&rsrc, cfg);
-        }
-        else
-        {
-            AMGX_resources_create(
-                &rsrc, cfg, &(PstreamGlobals::MPICommunicators_[gpuWorld_]), 1, &devID_);
-        }
-    }
-
-    //- create AmgX vector object for unknowns and RHS
-    AMGX_vector_create(&AmgXP, rsrc, mode);
-    AMGX_vector_create(&AmgXRHS, rsrc, mode);
-
-    //- create AmgX matrix object for unknowns and RHS
-    checkAmgXerror(AMGX_matrix_create(&AmgXA, rsrc, mode), "Matrix creation");
-
-    //- create an AmgX solver object
-    AMGX_solver_create(&solver, rsrc, mode, cfg);
-
-    //- obtain the default number of rings based on current configuration
-    AMGX_config_get_default_number_of_rings(cfg, &ring);
-}
-
-/* \implements AmgXSolver::finalize */
-void Foam::AmgXSolver::finalize()
-{
-    //- skip if this instance has not been initialised
-    if (!isInitialised)
-    {
-        fprintf(stderr,
-                "This AmgXWrapper has not been initialised. "
-                "Please initialise it before finalization.\n");
-    }
-
-    //- destroy solver instance
-    AMGX_solver_destroy(solver);
-
-    //- destroy matrix instance
-    AMGX_matrix_destroy(AmgXA);
-
-    //- destroy RHS and unknown vectors
-    AMGX_vector_destroy(AmgXP);
-    AMGX_vector_destroy(AmgXRHS);
-
-    //- only the last instance need to destroy resource and finalizing AmgX
-    if (count == 1)
-    {
-        AMGX_resources_destroy(rsrc);
-        AMGX_SAFE_CALL(AMGX_config_destroy(cfg));
-
-        AMGX_SAFE_CALL(AMGX_finalize());
-    }
-    else
-    {
-        AMGX_config_destroy(cfg);
-    }
-
-    //- decrease the number of instances
-    count -= 1;
-
-    //- change status
-    isInitialised = false;
-}
-
-/* \implements AmgXSolver::setOperator */
-void Foam::AmgXSolver::setOperator
+Foam::solverPerformance Foam::AmgXSolver::solve
 (
-    const label nLocalRows,
-    const label nGlobalRows,
-    const label nLocalNz,
-    const deviceCsrMatrix* matrix
-)
+    solveScalarField& psi,
+    const scalarField& source,
+    const direction cmpt
+) const
 {
-    //- Check the matrix size is not larger than tolerated by AmgX
-    if(nLocalRows > std::numeric_limits<int>::max())
-    {
-        fprintf(stderr,
-                "AmgX does not support a global number of rows greater than "
-                "what can be stored in 32 bits (nGlobalRows = %d).\n",
-                nLocalRows);
-    }
+    solverPerformance solverPerf
+    (
+        "AmgX", //lduMatrix::preconditioner::getName(controlDict_) + typeName,
+        this->fieldName_
+    );
 
-    if (nLocalNz > std::numeric_limits<int>::max())
-    {
-        fprintf(stderr,
-                "AmgX does not support non-zeros per (consolidated) rank greater than"
-                "what can be stored in 32 bits (nLocalNz = %d).\n",
-                nLocalNz);
-    }
-
-    const int * ownStart = matrix->ownerStart().cdata();
-    const int * colInd = matrix->colIndices().cdata();
-    const void * matValues = matrix->values().cdata();
-    const void * diagValues = matrix->diagValuesPtr();
-
-    //- upload matrix A to AmgX
-    if (!Pstream::parRun())
-    {
-        AMGX_matrix_upload_all(
-            AmgXA, nLocalRows, nLocalNz, 1, 1,
-            ownStart, colInd, matValues, diagValues);
-    }
-    else
-    {
-        AMGX_distribution_handle dist;
-        AMGX_distribution_create(&dist, cfg);
-
-        //- Must persist until after we call upload
-        labelList offsets(gpuWorldSize_ + 1, 0);
-
-        //- Determine the number of rows per GPU
-        labelList nRowsPerGPU(gpuWorldSize_, 0);
-        nRowsPerGPU.data()[myGpuWorldRank_] = nLocalRows;
-        Pstream::allGatherList(nRowsPerGPU, UPstream::msgType(), gpuWorld_);
-
-        //- Calculate the global offsets
-        for(int i = 0; i < gpuWorldSize_; ++i)
-        {
-            offsets.data()[i+1] = offsets.data()[i] + nRowsPerGPU.data()[i];
-        }
-
-        AMGX_distribution_set_partition_data(dist, AMGX_DIST_PARTITION_OFFSETS, offsets.data());
-
-        //- Set the column indices size, 32- / 64-bit
-        AMGX_distribution_set_32bit_colindices(dist, true);
-
-        AMGX_matrix_upload_distributed(
-            AmgXA, nGlobalRows, nLocalRows, nLocalNz, 1, 1, ownStart,
-            colInd, matValues, diagValues, dist);
-
-        AMGX_distribution_destroy(dist);
-    }
-
-    //- bind the matrix A to the solver
-    AMGX_solver_setup(solver, AmgXA);
-
-    //- connect (bind) vectors to the matrix
-    AMGX_vector_bind(AmgXP, AmgXA);
-    AMGX_vector_bind(AmgXRHS, AmgXA);
-}
-
-
-/* \implements AmgXSolver::updateOperator */
-void Foam::AmgXSolver::updateOperator
-(
-    const label nLocalRows,
-    const label nLocalNz,
-    const deviceCsrMatrix* matrix
-)
-{
-    const void * matValues = matrix->values().cdata();
-    const void * diagValues =  matrix->diagValuesPtr();
-
-    //- Replace the coefficients for the CSR matrix A within AmgX
-    AMGX_matrix_replace_coefficients(AmgXA, nLocalRows, nLocalNz, matValues, nullptr);
-
-    //- Re-setup the solver (a reduced overhead setup that accounts for consistent matrix structure)
-    AMGX_solver_resetup(solver, AmgXA);
-}
-
-
-/* \implements AmgXSolver::solve */
-void Foam::AmgXSolver::solve
-(
-    const label nLocalRows,
-    scalar* pscalar,
-    const scalar* bscalar
-)
-{
+    const fvMesh& fvm = dynamicCast<const fvMesh>(this->matrix_.mesh().thisDb());
     
-    //- Upload vectors to AmgX
-    AMGX_vector_upload(AmgXP, nLocalRows, 1, pscalar);
-    AMGX_vector_upload(AmgXRHS, nLocalRows, 1, bscalar);
+    label nCells = psi.size();
 
-    //- Solve
-    AMGX_solver_solve(solver, AmgXRHS, AmgXP);
+    const linearSolverContextTable<AmgXLinearSolverContext>& contexts =
+        linearSolverContextTable<AmgXLinearSolverContext>::New(fvm);
 
-    //- Get the status of the solver
-    AMGX_SOLVE_STATUS status;
-    AMGX_solver_get_status(solver, &status);
+    AmgXLinearSolverContext& ctx = contexts.getContext(eqName_);
 
-    //- Check whether the solver successfully solved the problem
-    if (status != AMGX_SOLVE_SUCCESS)
+    if (!ctx.loaded())
     {
-        fprintf(stderr, "AmgX solver failed to solve the system! "
-                        "The error code is %d.\n",
-                status);
+        FatalErrorInFunction
+            << "Could not initialize AMGx" << nl << abort(FatalError);
     }
 
-    // Download data from device
-    AMGX_vector_download(AmgXP, pscalar);
+    ctx.performance = solverPerf;
+
+    // AmgXWrapper& amgx = ctx.amgx_;
+    
+    csrMatrix& Amat = ctx.Amat_;
+
+    label nGlobalCells;
+
+    if(!Pstream::parRun())
+    {
+        nGlobalCells = nCells;
+        Amat.applyPermutation(this->matrix_);
+    }
+    /*else
+    {
+        if(!Amat.hasPermutation()) buildAndApplyMatrixPermutation(&Amat, nGlobalCells);
+        else applyMatrixPermutation(&Amat, nGlobalCells);
+    }*/
+
+    label nnz = Amat.values().size();
+
+    //- Print matrix converted to check
+    /*string fileName = "csrMatrix-cpu";
+    std::ofstream outFile(fileName, std::ios_base::app);
+    outFile << "ownerStart:" << nl;
+    for(int i=0; i< nCells; ++i) outFile << Amat.ownerStart().cdata()[i] << nl;
+    outFile << nl << "colIndeces:" << nl;
+    for(int i=0; i< nnz; ++i) outFile << Amat.colIndices().cdata()[i] << nl;
+    outFile << nl << "colIndeces:" << nl;
+    for(int i=0; i< nnz; ++i) outFile << Amat.values().cdata()[i] << nl;
+    outFile.close();*/
+
+    /*if(!ctx.initialized())
+    {
+        Info<< "Initializing AmgX-" << matType_ << " Linear Solver " << eqName_ << nl;
+
+        amgx.setOperator(nCells, nGlobalCells, nnz, &Amat);
+
+        Amat.clearAddressing();
+
+        ctx.initialized() = true;
+    }
+    else
+    {
+        amgx.updateOperator(nCells, nnz, &Amat);
+    }
+
+    amgx.solve(nCells, psi.data(), source.cdata());
+
+    scalar iNorm = 0.0;
+    amgx.getResidual(0, iNorm);
+    ctx.performance.initialResidual() = iNorm;
+
+    label nIters = 0;
+    amgx.getIters(nIters);
+    ctx.performance.nIterations() = nIters;
+
+    scalar fNorm = 0.0;
+    amgx.getResidual(nIters, fNorm);
+    ctx.performance.finalResidual() = fNorm;*/
+
+    return ctx.performance;
+    
 }
-
-
-/* \implements AmgXSolver::getIters */
-void Foam::AmgXSolver::getIters(label &iter)
-{
-    AMGX_solver_get_iterations_number(solver, &iter);
-}
-
-
-/* \implements AmgXSolver::getResidual */
-void Foam::AmgXSolver::getResidual(const label &iter, scalar &res)
-{
-    AMGX_solver_get_iteration_residual(solver, iter, 0, &res);
-}
-
 
 // * * * * * * * * * * * * * Explicit instantiations  * * * * * * * * * * * //
 
-#endif //endif del have_amgx
+
 
 // ************************************************************************* //

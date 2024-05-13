@@ -34,15 +34,14 @@ SourceFiles
 
 \*---------------------------------------------------------------------------*/
 
-#ifdef have_amgx
-
 #ifndef AmgXFoamLinearSolverContext_H
 #define AmgXFoamLinearSolverContext_H
 
 #include "linearSolverContext.H"
 #include "uncollatedFileOperation.H"
-#include "devicelduMatrix.H"
-#include "AmgXSolver.H"
+#include "lduMatrix.H"
+#include "csrMatrix.H"
+// #include "AmgXSolver.H"
 
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
@@ -51,13 +50,12 @@ namespace Foam
 {
 
 // Forward Declarations
-template<class matrix>
 class AmgXLinearSolverContext;
 
 /*---------------------------------------------------------------------------*\
                      Class AmgXLinearSolverContext Declaration
 \*---------------------------------------------------------------------------*/
-template<class matrix>
+
 class AmgXLinearSolverContext
 :
     public linearSolverContext
@@ -147,16 +145,17 @@ public:
     //- Runtime information
         TypeName("AmgXLinearSolverContext");
 
-    // Public Members
+    //- Public Members
 
-        AmgXSolver amgx_;
-        matrix Amat_;
+        // AmgXSolver amgx_;
+        csrMatrix Amat_;
 
         static const word packageName;
 
 
-    // Constructors
+    //- Constructors
 
+        //- Constructor with external .json file
         AmgXLinearSolverContext(const word eqName, const fileName& optionsFile)
         :
             linearSolverContext(eqName),
@@ -169,7 +168,7 @@ public:
             if (isFile(optionsFile))
             {
                 // AMGx initialize
-                if(!Pstream::parRun())
+                /*if(!Pstream::parRun())
                 {
                     amgx_.initialize(mode, optionsFile);
                 }
@@ -178,7 +177,7 @@ public:
                     const label nReq = Pstream::nRequests();
                     amgx_.initialize(Pstream::myWorldID(), mode, optionsFile);
                     Pstream::waitRequests(nReq);
-                }
+                }*/
             }
             else
             {
@@ -200,6 +199,7 @@ public:
             }
         }
 
+        //- Constructor with configuration in fvSoltuion dictionary
         AmgXLinearSolverContext(const word eqName, const dictionary solverDict)
         :
             linearSolverContext(eqName),
@@ -209,7 +209,7 @@ public:
 
             string configStr = writeConfigurationString(solverDict.subDict("AmgXconfig"));
 
-            if(!Pstream::parRun())
+            /*if(!Pstream::parRun())
             {
                 amgx_.initialize(mode, configStr);
             }
@@ -218,7 +218,7 @@ public:
                 const label nReq = Pstream::nRequests();
                 amgx_.initialize(Pstream::myWorldID(), mode, configStr);
                 Pstream::waitRequests(nReq);
-            }
+            }*/
 
             Info<< "Initializing AmgX-" << eqName << " context" << nl;
             loaded_ = 1;
@@ -230,7 +230,7 @@ public:
             if (loaded_ > 0)
             {
                 Info<< "Finalizing AmgX-" << eqName << nl;
-                amgx_.finalize();
+                // amgx_.finalize();
                 // Amat.finalise();
                 loaded_ = 0;
             }
@@ -252,10 +252,6 @@ public:
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
 } // End namespace Foam
-
-#endif
-
-// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
 #endif
 

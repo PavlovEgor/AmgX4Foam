@@ -1,1 +1,3 @@
 .vscode
+src/Make/linux*
+src/lnInclude

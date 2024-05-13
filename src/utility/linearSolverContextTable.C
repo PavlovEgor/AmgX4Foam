@@ -25,18 +25,21 @@ License
 
 \*---------------------------------------------------------------------------*/
 
+#include "linearSolverContextTable.H"
 #include "AmgXLinearSolverContext.H"
-
-// * * * * * * * * * * * * * explicit instantiation * * * * * * * * * * * * //
-
 
 // * * * * * * * * * * * * * * Static Data Members * * * * * * * * * * * * * //
 
 namespace Foam
 {
-    defineTypeNameAndDebug(AmgXLinearSolverContext, 0);
+    defineTemplateTypeNameAndDebugWithName
+    (
+        linearSolverContextTable<AmgXLinearSolverContext>,
+        "AmgXCsrLinearSolverContextTable",
+        0
+    );
 
-    const word AmgXLinearSolverContext::packageName = "AmgX";
-}
+} // End namespace Foam
+
 
 // ************************************************************************* //

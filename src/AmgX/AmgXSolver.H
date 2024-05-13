@@ -5,9 +5,8 @@
     \\  /    A nd           | www.openfoam.com
      \\/     M anipulation  |
 -------------------------------------------------------------------------------
-    Copyright (C) 2011-2017 OpenFOAM Foundation
-    Copyright (C) 2016-2023 OpenCFD Ltd.
-    Copyright (C) 2023      Cineca
+    Copyright (C) 2011-2012 OpenFOAM Foundation
+    Copyright (C) 2019 OpenCFD Ltd.
 -------------------------------------------------------------------------------
 License
     This file is part of OpenFOAM.
@@ -28,257 +27,102 @@ License
 Class
     Foam::AmgXSolver
 
+Group
+    grpLduMatrixSolvers
+
 Description
-     Lorem ipsum.
+    Interface to the external package AmgX (https://github.com/NVIDIA/AMGX).
 
 SourceFiles
-    AmgXSolver.H
     AmgXSolver.C
-
 
 \*---------------------------------------------------------------------------*/
 
-#ifdef have_amgx
+#ifndef device_AmgX_H
+#define device_AmgX_H
 
-#ifndef Foam_AmgXSolver_H
-#define Foam_AmgXSolver_H
-
-// CUDA
-// #include <cuda_runtime.h>
-
-// AmgX
-#include <amgx_c.h>
-
-#include "word.H"
-#include "scalar.H"
-#include "label.H"
-#include "IOstreams.H"
-#include "deviceCsrMatrix.H"
-#include "deviceMsrMatrix.H"
+#include "lduMatrix.H"
+#include "csrMatrix.H"
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
 namespace Foam
 {
 
-// Forward Declarations
-
-
 /*---------------------------------------------------------------------------*\
-                           Class AmgXSolver Declaration
+                             Class AmgXSolver Declaration
 \*---------------------------------------------------------------------------*/
 
 class AmgXSolver
+:
+    public lduMatrix::solver
 {
-    public:
+    // Private Member Data
 
-        /** \brief Default constructor. */
-        AmgXSolver() = default;
+        //- Equation name for solver context
+        word eqName_;        
 
-        /** \brief Construct a AmgXSolver instance.
-         *
-         * \param comm [in] MPI communicator.
-         * \param modeStr [in] A string; target mode of AmgX (e.g., dDDI).
-         * \param cfgFile [in] A string; the path to AmgX configuration file.
-         */
-        /*AmgXSolver
+        //- Cached preconditioner
+        // mutable autoPtr<lduMatrix::preconditioner> preconPtr_;
+
+
+    // Private Member Functions
+
+        //- No copy construct
+        AmgXSolver(const AmgXSolver&) = delete;
+
+        //- No copy assignment
+        void operator=(const AmgXSolver&) = delete;
+
+        //- Compute matrix addressing and value permutation for AmgX use
+        /*void buildAndApplyMatrixPermutation
         (
-            // const MPI_Comm &comm,
-            // const std::string &modeStr,
-            // const std::string &cfgFile
-        );*/
+            deviceCsrMatrix* csrMatrix,
+            label& nRowsGlobal
+        ) const;*/
 
-        /** \brief Destructor. */
-        ~AmgXSolver();
-
-        /** \brief Initialize a AmgXSolver instance.
-         *
-         * \param comm [in] MPI communicator.
-         * \param modeStr [in] A string; target mode of AmgX (e.g., dDDI).
-         * \param cfgFile [in] A string; the path to AmgX configuration file.
-         */
-        void initialize
+        //- Compute matrix value permutation for AmgX use
+        /*void applyMatrixPermutation
         (
-            const word &modeStr,
-            const string &configStr //fileName &cfgFile
-        );
+            deviceCsrMatrix* csrMatrix,
+            label& nRowsGlobal
+        ) const;*/
 
-        void initialize
+
+public:
+
+    //- Runtime type information
+    TypeName("AmgX");
+
+
+    // Constructors
+
+        //- Construct from matrix components and solver controls
+        AmgXSolver
         (
-            const label &commId,
-            const word &modeStr,
-            const string &configStr //fileName &cfgFile
-        );
-
-        /** \brief Finalize this instance.
-         *
-         * This function destroys AmgX data. When there are more than one
-         * AmgXSolver instances, the last one destroyed is also in charge of
-         * destroying the shared resource object and finalizing AmgX.
-         */
-        void finalize();
-
-
-        /** \brief Set up the matrix used by AmgX.
-         *
-         * This function sets up the AmgX matrix from the provided CSR data
-         * structures and partition data.
-         *
-         * \param nLocalRows [in] The number of local rows on this rank.
-         * \param nGlobalRows [in] The number of global rows.
-         * \param nLocalNz [in] The total number of non zero entries locally.
-         * \param matrix [in] CSR matrix.
-         */
-        void setOperator
-        (
-            const label nLocalRows,
-            const label nGlobalRows,
-            const label nLocalNz,
-            const deviceCsrMatrix* matrix
+            const word& fieldName,
+            const lduMatrix& matrix,
+            const FieldField<Field, scalar>& interfaceBouCoeffs,
+            const FieldField<Field, scalar>& interfaceIntCoeffs,
+            const lduInterfaceFieldPtrsList& interfaces,
+            const dictionary& solverControls
         );
 
 
-        /** \brief Re-sets up an existing AmgX matrix.
-         *
-         * Replaces the matrix coefficients with the provided values and performs
-         * a resetup for the AmgX matrix.
-         *
-         * \param nLocalRows [in] The number of local rows on this rank.
-         * \param nLocalNz [in] The total number of non zero entries locally.
-         * \param matrix [in] CSR matrix.
-         *
-         * \return PetscErrorCode.
-         */
-        void updateOperator
+    //- Destructor
+        virtual ~AmgXSolver() = default;
+
+
+    // Member Functions
+
+        //- Solve the matrix with this solver
+        virtual solverPerformance solve
         (
-            const label nLocalRows,
-            const label nLocalNz,
-            const deviceCsrMatrix* matrix
-        );
+            solveScalarField& psi,
+            const scalarField& source,
+            const direction cmpt=0
+        ) const;
 
-
-        /** \brief Solve the linear system.
-         *
-         * \p p vector will be used as an initial guess and will be updated to the
-         * solution by the end of solving.
-         *
-         * For cases that use more MPI processes than the number of GPUs, this
-         * function will do data gathering before solving and data scattering
-         * after the solving.
-         *
-         * \param nLocalRows [in] The number of rows owned by this rank.
-         * \param pscalar [in, out] The unknown array.
-         * \param bscalar [in] The RHS array.
-         */
-        void solve
-        (
-            const label nLocalRows,
-            scalar* pscalar,
-            const scalar* bscalar
-        );
-
-        /** \brief Get the number of iterations of the last solving.
-         *
-         * \param iter [out] Number of iterations.
-         */
-        void getIters
-        (
-            label &iter
-        );
-
-        /** \brief Get the residual at a specific iteration during the last solving.
-         *
-         * \param iter [in] Target iteration.
-         * \param res [out] Returned residual.
-         */
-        void getResidual
-        (
-            const label &iter,
-            scalar &res
-        );
-
-
-    private:
-
-        /** \brief Current count of AmgXSolver instances.
-         *
-         * This static variable is used to count the number of instances. The
-         * fisrt instance is responsable for initializing AmgX library and the
-         * resource instance.
-         */
-        static label              count;
-
-        /** \brief A flag indicating if this instance has been initialized. */
-        bool                    isInitialised = false;
-
-        /** \brief Number of local GPU devices used by AmgX.*/
-        label                   nDevs_;
-
-        /** \brief The ID of corresponding GPU device used by this MPI process. */
-        label                   devID_;
-
-        /** \brief the index of the MPI communicator processes that can talk to GPUs. */
-        int                      gpuWorld_;
-
-        /** \brief Size of \ref AmgXSolver::gpuWorld "gpuWorld". */
-        int                     gpuWorldSize_;
-
-        /** \brief Rank in \ref AmgXSolver::gpuWorld "gpuWorld". */
-        int                     myGpuWorldRank_;
-
-        /** \brief A parameter used by AmgX. */
-        label                   ring;
-
-        /** \brief AmgX solver mode. */
-        AMGX_Mode               mode;
-
-        /** \brief AmgX config object. */
-        AMGX_config_handle      cfg = nullptr;
-
-        /** \brief AmgX matrix object. */
-        AMGX_matrix_handle      AmgXA = nullptr;
-
-        /** \brief AmgX vector object representing unknowns. */
-        AMGX_vector_handle      AmgXP = nullptr;
-
-        /** \brief AmgX vector object representing RHS. */
-        AMGX_vector_handle      AmgXRHS = nullptr;
-
-        /** \brief AmgX solver object. */
-        AMGX_solver_handle      solver = nullptr;
-
-        /** \brief AmgX resource object.
-         *
-         * Due to the design of AmgX library, using more than one resource
-         * instance may cause some problems. So we make the resource instance
-         * as a static member to keep only one instance.
-         */
-        static AMGX_resources_handle   rsrc;
-
-        /** \brief Set AmgX solver mode based on the user-provided string.
-         *
-         * Available modes are: dDDI, dDFI, dFFI, hDDI, hDFI, hFFI.
-         *
-         * \param modeStr [in] a std::string.
-         */
-        void setMode(const word &modeStr);
-
-        /** \brief Set indices relatively to MPI comunications.
-         *
-         * \param commId [in] Global communicator index.
-         */
-        void initComms(const int &commId);
-
-        /** \brief Perform necessary initialization of AmgX.
-         *
-         * This function initializes AmgX for current instance. Based on
-         * \ref AmgXSolver::count "count", only the instance initialized first
-         * is in charge of initializing AmgX and the resource instance.
-         *
-         * \param configStr [in] configuration string.
-         * \return PetscErrorCode.
-         */
-        void initAmgX(const string &configStr);
 };
 
 
@@ -286,11 +130,6 @@ class AmgXSolver
 
 } // End namespace Foam
 
-// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
-
-#endif
-
 #endif
 
 // ************************************************************************* //
-
