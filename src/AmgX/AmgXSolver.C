@@ -290,7 +290,7 @@ Foam::solverPerformance Foam::AmgXSolver::solve
 
     ctx.performance = solverPerf;
 
-    // AmgXWrapper& amgx = ctx.amgx_;
+    AmgXWrapper& amgx = ctx.amgx_;
     
     csrMatrix& Amat = ctx.Amat_;
 
@@ -320,9 +320,9 @@ Foam::solverPerformance Foam::AmgXSolver::solve
     for(int i=0; i< nnz; ++i) outFile << Amat.values().cdata()[i] << nl;
     outFile.close();*/
 
-    /*if(!ctx.initialized())
+    if(!ctx.initialized())
     {
-        Info<< "Initializing AmgX-" << matType_ << " Linear Solver " << eqName_ << nl;
+        Info<< "Initializing AmgX Linear Solver " << eqName_ << nl;
 
         amgx.setOperator(nCells, nGlobalCells, nnz, &Amat);
 
@@ -347,7 +347,7 @@ Foam::solverPerformance Foam::AmgXSolver::solve
 
     scalar fNorm = 0.0;
     amgx.getResidual(nIters, fNorm);
-    ctx.performance.finalResidual() = fNorm;*/
+    ctx.performance.finalResidual() = fNorm;
 
     return ctx.performance;
     

@@ -27,25 +27,23 @@ License
 
 \*---------------------------------------------------------------------------*/
 
-#ifdef have_amgx
-
-#include "AmgXSolver.H"
-#include "deviceField.H"
-#include "global.cuh"
+#include "AmgXWrapper.H"
 
 #include "PstreamGlobals.H"
 
-// initialize AmgXSolver::count to 0
-int Foam::AmgXSolver::count = 0;
+#include "cuda_runtime.h"
 
-// initialize AmgXSolver::rsrc to nullptr;
-AMGX_resources_handle Foam::AmgXSolver::rsrc = nullptr;
+// initialize AmgXWrapper::count to 0
+int Foam::AmgXWrapper::count = 0;
+
+// initialize AmgXWrapper::rsrc to nullptr;
+AMGX_resources_handle Foam::AmgXWrapper::rsrc = nullptr;
 
 
 // * * * * * * * * * * * * * * * * Constructors  * * * * * * * * * * * * * * //
 
-/* \implements AmgXSolver::AmgXSolver */
-/*Foam::AmgXSolver::AmgXSolver
+/* \implements AmgXWrapper::AmgXWrapper */
+/*Foam::AmgXWrapper::AmgXWrapper
 (
     const MPI_Comm &comm,
     const std::string &modeStr,
@@ -57,8 +55,8 @@ AMGX_resources_handle Foam::AmgXSolver::rsrc = nullptr;
 
 // * * * * * * * * * * * * * * * Destructor * * * * * * * * * * * * * * * * * //
 
-/* \implements AmgXSolver::~AmgXSolver */
-Foam::AmgXSolver::~AmgXSolver()
+/* \implements AmgXWrapper::~AmgXWrapper */
+Foam::AmgXWrapper::~AmgXWrapper()
 {
     if (isInitialised)
         finalize();
@@ -78,13 +76,14 @@ void checkAmgXerror(AMGX_RC code, Foam::word function)
 
 // * * * * * * * * * * * * * * Member functions  * * * * * * * * * * * * * * * //
 
-/* \implements AmgXSolver::initialize*/
-void Foam::AmgXSolver::initialize(
+/* \implements AmgXWrapper::initialize*/
+void Foam::AmgXWrapper::initialize(
     const word &modeStr,
+    const word &dataLocation,
     const string &configStr
 )
 {
-    //- increase the number of AmgXSolver instances
+    //- increase the number of AmgXWrapper instances
     count += 1;
 
     //- get the mode of AmgX solver
@@ -92,17 +91,20 @@ void Foam::AmgXSolver::initialize(
 
     initAmgX(configStr);
 
+    dataOrigin_ = dataLocation;
+
     isInitialised = true;
 }
 
-/* \implements AmgXSolver::initialize*/
-void Foam::AmgXSolver::initialize(
+/* \implements AmgXWrapper::initialize*/
+void Foam::AmgXWrapper::initialize(
     const label &commId,
     const word &modeStr,
+    const word &dataLocation,
     const string &configStr
 )
 {
-    //- increase the number of AmgXSolver instances
+    //- increase the number of AmgXWrapper instances
     count += 1;
 
     //- get the mode of AmgX solver
@@ -113,11 +115,13 @@ void Foam::AmgXSolver::initialize(
 
     initAmgX(configStr);
 
+    dataOrigin_ = dataLocation;
+
     isInitialised = true;
 }
 
-/* \implements AmgXSolver::setMode */
-void Foam::AmgXSolver::setMode(const word &modeStr)
+/* \implements AmgXWrapper::setMode */
+void Foam::AmgXWrapper::setMode(const word &modeStr)
 {
     if (modeStr == "dDDI")
         mode = AMGX_mode_dDDI;
@@ -130,8 +134,8 @@ void Foam::AmgXSolver::setMode(const word &modeStr)
 }
 
 
-/* \implements AmgXSolver::initComms */
-void Foam::AmgXSolver::initComms(const int &commId)
+/* \implements AmgXWrapper::initComms */
+void Foam::AmgXWrapper::initComms(const int &commId)
 {
     //- duplicate the communicator
     gpuWorld_ = commId;
@@ -145,8 +149,8 @@ void Foam::AmgXSolver::initComms(const int &commId)
 }
 
 
-/* \implements AmgXSolver::initAmgX */
-void Foam::AmgXSolver::initAmgX(const string &configStr)
+/* \implements AmgXWrapper::initAmgX */
+void Foam::AmgXWrapper::initAmgX(const string &configStr)
 {
     //- only the first instance (AmgX solver) is in charge of initializing AmgX
     if (count == 1)
@@ -204,8 +208,8 @@ void Foam::AmgXSolver::initAmgX(const string &configStr)
     AMGX_config_get_default_number_of_rings(cfg, &ring);
 }
 
-/* \implements AmgXSolver::finalize */
-void Foam::AmgXSolver::finalize()
+/* \implements AmgXWrapper::finalize */
+void Foam::AmgXWrapper::finalize()
 {
     //- skip if this instance has not been initialised
     if (!isInitialised)
@@ -245,13 +249,13 @@ void Foam::AmgXSolver::finalize()
     isInitialised = false;
 }
 
-/* \implements AmgXSolver::setOperator */
-void Foam::AmgXSolver::setOperator
+/* \implements AmgXWrapper::setOperator */
+void Foam::AmgXWrapper::setOperator
 (
     const label nLocalRows,
     const label nGlobalRows,
     const label nLocalNz,
-    const deviceCsrMatrix* matrix
+    const csrMatrix* matrix
 )
 {
     //- Check the matrix size is not larger than tolerated by AmgX
@@ -271,17 +275,35 @@ void Foam::AmgXSolver::setOperator
                 nLocalNz);
     }
 
-    const int * ownStart = matrix->ownerStart().cdata();
-    const int * colInd = matrix->colIndices().cdata();
-    const void * matValues = matrix->values().cdata();
-    const void * diagValues = matrix->diagValuesPtr();
+    const int * ownStart; // = matrix->ownerStart().cdata();
+    const int * colInd; // = matrix->colIndices().cdata();
+    const void * matValues; // = matrix->values().cdata();
+
+    if(dataOrigin_ == "host")
+    {
+        /*AMGX_pin_memory((void*) matrix->ownerStart().cdata(), (nLocalRows+1)*sizeof(int));
+        AMGX_pin_memory((void*) matrix->colIndices().cdata(), (nLocalNz+1)*sizeof(int));
+        AMGX_pin_memory((void*) matrix->values().cdata(), (nLocalRows+1)*sizeof(double));*/
+        cudaMalloc((void**) &ownStart, sizeof(int)*(nLocalRows+1));
+        cudaMalloc((void**) &colInd, sizeof(int)*nLocalNz);
+        cudaMalloc((void**) &matValues, sizeof(double)*nLocalNz);
+        cudaMemcpy((void*) ownStart, (const void*) matrix->ownerStart().cdata(), sizeof(int)*(nLocalRows+1), cudaMemcpyHostToDevice);
+        cudaMemcpy((void*) colInd, (const void*) matrix->colIndices().cdata(), sizeof(int)*nLocalNz, cudaMemcpyHostToDevice);
+        cudaMemcpy((void*) matValues, (const void*) matrix->values().cdata(), sizeof(double)*nLocalNz, cudaMemcpyHostToDevice);
+    }
+    else
+    {
+        ownStart = matrix->ownerStart().cdata();
+        colInd = matrix->colIndices().cdata();
+        matValues = matrix->values().cdata();
+    }
 
     //- upload matrix A to AmgX
     if (!Pstream::parRun())
     {
         AMGX_matrix_upload_all(
             AmgXA, nLocalRows, nLocalNz, 1, 1,
-            ownStart, colInd, matValues, diagValues);
+            ownStart, colInd, matValues, nullptr);
     }
     else
     {
@@ -309,7 +331,7 @@ void Foam::AmgXSolver::setOperator
 
         AMGX_matrix_upload_distributed(
             AmgXA, nGlobalRows, nLocalRows, nLocalNz, 1, 1, ownStart,
-            colInd, matValues, diagValues, dist);
+            colInd, matValues, nullptr, dist);
 
         AMGX_distribution_destroy(dist);
     }
@@ -323,16 +345,15 @@ void Foam::AmgXSolver::setOperator
 }
 
 
-/* \implements AmgXSolver::updateOperator */
-void Foam::AmgXSolver::updateOperator
+/* \implements AmgXWrapper::updateOperator */
+void Foam::AmgXWrapper::updateOperator
 (
     const label nLocalRows,
     const label nLocalNz,
-    const deviceCsrMatrix* matrix
+    const csrMatrix* matrix
 )
 {
     const void * matValues = matrix->values().cdata();
-    const void * diagValues =  matrix->diagValuesPtr();
 
     //- Replace the coefficients for the CSR matrix A within AmgX
     AMGX_matrix_replace_coefficients(AmgXA, nLocalRows, nLocalNz, matValues, nullptr);
@@ -342,8 +363,8 @@ void Foam::AmgXSolver::updateOperator
 }
 
 
-/* \implements AmgXSolver::solve */
-void Foam::AmgXSolver::solve
+/* \implements AmgXWrapper::solve */
+void Foam::AmgXWrapper::solve
 (
     const label nLocalRows,
     scalar* pscalar,
@@ -375,15 +396,15 @@ void Foam::AmgXSolver::solve
 }
 
 
-/* \implements AmgXSolver::getIters */
-void Foam::AmgXSolver::getIters(label &iter)
+/* \implements AmgXWrapper::getIters */
+void Foam::AmgXWrapper::getIters(label &iter)
 {
     AMGX_solver_get_iterations_number(solver, &iter);
 }
 
 
-/* \implements AmgXSolver::getResidual */
-void Foam::AmgXSolver::getResidual(const label &iter, scalar &res)
+/* \implements AmgXWrapper::getResidual */
+void Foam::AmgXWrapper::getResidual(const label &iter, scalar &res)
 {
     AMGX_solver_get_iteration_residual(solver, iter, 0, &res);
 }
@@ -391,6 +412,5 @@ void Foam::AmgXSolver::getResidual(const label &iter, scalar &res)
 
 // * * * * * * * * * * * * * Explicit instantiations  * * * * * * * * * * * //
 
-#endif //endif del have_amgx
 
 // ************************************************************************* //

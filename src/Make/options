@@ -15,3 +15,4 @@ LIB_LIBS = \
     -L$(AMGX_LIB) -lamgxsh -fopenmp \
     -L$(FOAM_USER_LIBBIN)
 
+CC += -gpu=cc$(NVARCH) -cuda

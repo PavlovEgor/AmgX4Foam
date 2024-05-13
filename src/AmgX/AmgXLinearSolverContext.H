@@ -41,7 +41,7 @@ SourceFiles
 #include "uncollatedFileOperation.H"
 #include "lduMatrix.H"
 #include "csrMatrix.H"
-// #include "AmgXSolver.H"
+#include "AmgXWrapper.H"
 
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
@@ -147,7 +147,7 @@ public:
 
     //- Public Members
 
-        // AmgXSolver amgx_;
+        AmgXWrapper amgx_;
         csrMatrix Amat_;
 
         static const word packageName;
@@ -156,7 +156,7 @@ public:
     //- Constructors
 
         //- Constructor with external .json file
-        AmgXLinearSolverContext(const word eqName, const fileName& optionsFile)
+        AmgXLinearSolverContext(const word eqName, const fileName& optionsFile, const dictionary solverDict)
         :
             linearSolverContext(eqName),
             loaded_(false)
@@ -164,20 +164,21 @@ public:
             int err = 0;
 
             word mode = "dDDI";
+            word dataLocation = solverDict.get<word>("dataLocation");
 
             if (isFile(optionsFile))
             {
                 // AMGx initialize
-                /*if(!Pstream::parRun())
+                if(!Pstream::parRun())
                 {
-                    amgx_.initialize(mode, optionsFile);
+                    amgx_.initialize(mode, dataLocation, optionsFile);
                 }
                 else
                 {
                     const label nReq = Pstream::nRequests();
-                    amgx_.initialize(Pstream::myWorldID(), mode, optionsFile);
+                    amgx_.initialize(Pstream::myWorldID(), mode, dataLocation, optionsFile);
                     Pstream::waitRequests(nReq);
-                }*/
+                }
             }
             else
             {
@@ -206,19 +207,20 @@ public:
             loaded_(false)
         {
             word mode = "dDDI";
+            word dataLocation =solverDict.get<word>("dataLocation");
 
             string configStr = writeConfigurationString(solverDict.subDict("AmgXconfig"));
 
-            /*if(!Pstream::parRun())
+            if(!Pstream::parRun())
             {
-                amgx_.initialize(mode, configStr);
+                amgx_.initialize(mode, dataLocation, configStr);
             }
             else
             {
                 const label nReq = Pstream::nRequests();
-                amgx_.initialize(Pstream::myWorldID(), mode, configStr);
+                amgx_.initialize(Pstream::myWorldID(), mode, dataLocation, configStr);
                 Pstream::waitRequests(nReq);
-            }*/
+            }
 
             Info<< "Initializing AmgX-" << eqName << " context" << nl;
             loaded_ = 1;

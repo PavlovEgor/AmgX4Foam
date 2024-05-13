@@ -26,22 +26,20 @@ License
     along with OpenFOAM.  If not, see <http://www.gnu.org/licenses/>.
 
 Class
-    Foam::AmgXSolver
+    Foam::AmgXWrapper
 
 Description
      Lorem ipsum.
 
 SourceFiles
-    AmgXSolver.H
-    AmgXSolver.C
+    AmgXWrapper.H
+    AmgXWrapper.C
 
 
 \*---------------------------------------------------------------------------*/
 
-#ifdef have_amgx
-
-#ifndef Foam_AmgXSolver_H
-#define Foam_AmgXSolver_H
+#ifndef Foam_AmgXWrapper_H
+#define Foam_AmgXWrapper_H
 
 // CUDA
 // #include <cuda_runtime.h>
@@ -53,8 +51,7 @@ SourceFiles
 #include "scalar.H"
 #include "label.H"
 #include "IOstreams.H"
-#include "deviceCsrMatrix.H"
-#include "deviceMsrMatrix.H"
+#include "csrMatrix.H"
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
@@ -65,55 +62,63 @@ namespace Foam
 
 
 /*---------------------------------------------------------------------------*\
-                           Class AmgXSolver Declaration
+                           Class AmgXWrapper Declaration
 \*---------------------------------------------------------------------------*/
 
-class AmgXSolver
+class AmgXWrapper
 {
     public:
 
         /** \brief Default constructor. */
-        AmgXSolver() = default;
+        AmgXWrapper() = default;
 
-        /** \brief Construct a AmgXSolver instance.
+
+        /** \brief Construct a AmgXWrapper instance.
          *
          * \param comm [in] MPI communicator.
          * \param modeStr [in] A string; target mode of AmgX (e.g., dDDI).
          * \param cfgFile [in] A string; the path to AmgX configuration file.
          */
-        /*AmgXSolver
+        /*AmgXWrapper
         (
             // const MPI_Comm &comm,
             // const std::string &modeStr,
             // const std::string &cfgFile
         );*/
 
-        /** \brief Destructor. */
-        ~AmgXSolver();
 
-        /** \brief Initialize a AmgXSolver instance.
+        /** \brief Destructor. */
+        ~AmgXWrapper();
+
+
+        /** \brief Initialize a AmgXWrapper instance.
          *
-         * \param comm [in] MPI communicator.
+         * \param commId [in] MPI communicator.
          * \param modeStr [in] A string; target mode of AmgX (e.g., dDDI).
-         * \param cfgFile [in] A string; the path to AmgX configuration file.
+         * \param dataLocation [in] A string; indicates where are data.
+         * \param configStr [in] A string; the path to AmgX configuration file
+         *                  or a configuration string already concatenated.
          */
         void initialize
         (
             const word &modeStr,
-            const string &configStr //fileName &cfgFile
+            const word &dataLocation,
+            const string &configStr
         );
 
         void initialize
         (
             const label &commId,
             const word &modeStr,
-            const string &configStr //fileName &cfgFile
+            const word &dataLocation,
+            const string &configStr
         );
+
 
         /** \brief Finalize this instance.
          *
          * This function destroys AmgX data. When there are more than one
-         * AmgXSolver instances, the last one destroyed is also in charge of
+         * AmgXWrapper instances, the last one destroyed is also in charge of
          * destroying the shared resource object and finalizing AmgX.
          */
         void finalize();
@@ -134,7 +139,7 @@ class AmgXSolver
             const label nLocalRows,
             const label nGlobalRows,
             const label nLocalNz,
-            const deviceCsrMatrix* matrix
+            const csrMatrix* matrix
         );
 
 
@@ -153,7 +158,7 @@ class AmgXSolver
         (
             const label nLocalRows,
             const label nLocalNz,
-            const deviceCsrMatrix* matrix
+            const csrMatrix* matrix
         );
 
 
@@ -200,13 +205,13 @@ class AmgXSolver
 
     private:
 
-        /** \brief Current count of AmgXSolver instances.
+        /** \brief Current count of AmgXWrapper instances.
          *
          * This static variable is used to count the number of instances. The
          * fisrt instance is responsable for initializing AmgX library and the
          * resource instance.
          */
-        static label              count;
+        static label            count;
 
         /** \brief A flag indicating if this instance has been initialized. */
         bool                    isInitialised = false;
@@ -220,14 +225,17 @@ class AmgXSolver
         /** \brief the index of the MPI communicator processes that can talk to GPUs. */
         int                      gpuWorld_;
 
-        /** \brief Size of \ref AmgXSolver::gpuWorld "gpuWorld". */
+        /** \brief Size of \ref AmgXWrapper::gpuWorld "gpuWorld". */
         int                     gpuWorldSize_;
 
-        /** \brief Rank in \ref AmgXSolver::gpuWorld "gpuWorld". */
+        /** \brief Rank in \ref AmgXWrapper::gpuWorld "gpuWorld". */
         int                     myGpuWorldRank_;
 
         /** \brief A parameter used by AmgX. */
         label                   ring;
+
+        /** \brief Data origin. */
+        word                    dataOrigin_;
 
         /** \brief AmgX solver mode. */
         AMGX_Mode               mode;
@@ -272,7 +280,7 @@ class AmgXSolver
         /** \brief Perform necessary initialization of AmgX.
          *
          * This function initializes AmgX for current instance. Based on
-         * \ref AmgXSolver::count "count", only the instance initialized first
+         * \ref AmgXWrapper::count "count", only the instance initialized first
          * is in charge of initializing AmgX and the resource instance.
          *
          * \param configStr [in] configuration string.
@@ -290,7 +298,6 @@ class AmgXSolver
 
 #endif
 
-#endif
 
 // ************************************************************************* //
 

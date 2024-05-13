@@ -2,5 +2,6 @@ csrMatrix/cpuCsrMatrices.C
 utility/linearSolverContextTable.C
 AmgX/AmgXLinearSolverContext.C
 AmgX/AmgXSolver.C
+AmgX/AmgXWrapper.C
 
 LIB = $(FOAM_USER_LIBBIN)/libEscapeFromFoam

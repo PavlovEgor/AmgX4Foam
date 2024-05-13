@@ -121,7 +121,7 @@ public:
                 fileName optionsFile = this->mesh().thisDb().time().system()/T::packageName + name + "Options";
                 if(isFile(optionsFile))
                 {
-                    contexts().set(name, new T{name, optionsFile});
+                    contexts().set(name, new T{name, optionsFile, this->mesh_.solverDict(name)});
                 }
                 else
                 {
