@@ -38,8 +38,8 @@ SourceFiles
 
 \*---------------------------------------------------------------------------*/
 
-#ifndef device_AmgX_H
-#define device_AmgX_H
+#ifndef Foam_AmgXSolver_H
+#define Foam_AmgXSolver_H
 
 #include "lduMatrix.H"
 #include "csrMatrix.H"

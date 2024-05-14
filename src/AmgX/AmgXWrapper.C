@@ -31,8 +31,6 @@ License
 
 #include "PstreamGlobals.H"
 
-#include "cuda_runtime.h"
-
 // initialize AmgXWrapper::count to 0
 int Foam::AmgXWrapper::count = 0;
 
@@ -255,7 +253,7 @@ void Foam::AmgXWrapper::setOperator
     const label nLocalRows,
     const label nGlobalRows,
     const label nLocalNz,
-    const csrMatrix* matrix
+    const csrAdressing* matrix
 )
 {
     //- Check the matrix size is not larger than tolerated by AmgX
@@ -350,7 +348,7 @@ void Foam::AmgXWrapper::updateOperator
 (
     const label nLocalRows,
     const label nLocalNz,
-    const csrMatrix* matrix
+    const csrAdressing* matrix
 )
 {
     const void * matValues = matrix->values().cdata();

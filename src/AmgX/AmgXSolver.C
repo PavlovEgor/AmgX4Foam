@@ -31,8 +31,6 @@ License
 #include "direction.H"
 #include "AmgXLinearSolverContext.H"
 #include "linearSolverContextTable.H"
-// #include "AmgXWrapper.H"
-
 #include "csrMatrix.H"
 
 #include "globalIndex.H"
@@ -277,10 +275,10 @@ Foam::solverPerformance Foam::AmgXSolver::solve
     
     label nCells = psi.size();
 
-    const linearSolverContextTable<AmgXLinearSolverContext>& contexts =
-        linearSolverContextTable<AmgXLinearSolverContext>::New(fvm);
+    const linearSolverContextTable<AmgXLinearSolverContext<csrMatrix>>& contexts =
+        linearSolverContextTable<AmgXLinearSolverContext<csrMatrix>>::New(fvm);
 
-    AmgXLinearSolverContext& ctx = contexts.getContext(eqName_);
+    AmgXLinearSolverContext<csrMatrix>& ctx = contexts.getContext(eqName_);
 
     if (!ctx.loaded())
     {

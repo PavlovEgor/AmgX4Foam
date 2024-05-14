@@ -29,11 +29,7 @@ Class
     Foam::csrMatrix
 
 Description
-    csrMatrix is a general matrix class in which the coefficients are stored
-    in a single array.
-
-    Addressing arrays must be supplied for the number of values per row and
-    for teh values column index.
+    Single block csrMatrix class.
 
 SourceFiles
     csrMatrix.H
@@ -47,6 +43,7 @@ SourceFiles
 #include "Enum.H"
 #include "scalar.H"
 #include "lduMatrix.H"
+#include "csrAdressing.H"
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
@@ -62,99 +59,17 @@ class csrMatrix;
 \*---------------------------------------------------------------------------*/
 
 class csrMatrix
+:
+    public csrAdressing
 {
     // Private Data
-
-    // Private methods
-
-        //- Computation of the permutatrion array
-        virtual void computePermutation(const lduAddressing * addr);
-
-        //- Computation of the permutatrion array
-        virtual void computePermutation
-        (
-            const lduAddressing * addr,
-            const label diagIndexGlobal,
-            const label lowOffGlobal,
-            const label uppOffGlobal,
-            const labelList& extRows,
-            const labelList& extCols
-        );
-
-protected:
-    //- Protected Data
 
         //- Coefficients
         scalarField *valuesPtr_;
 
-        //- Numbers of non-zeros per row
-        labelList *ownerStartPtr_;
-        // int * ownerStartPtr_;
 
-        //- Column indices array
-        labelList *colIndicesPtr_;
-
-        //- Permutation ldu2csr array
-        labelList *ldu2csrPerm_;
-
-    //- Protected functions
-        void initializeAddressing
-        (
-            const int   nCells,
-            const int   nInternalFaces,
-            const int   totNnz,
-            const int * const owner,
-            const int * const neighbour,
-                  int * tmpPerm,
-                  int * rowIndTmp,
-                  int * colIndTmp
-        );
-
-        void initializeAddressingExt
-        (
-            const int   nCells,
-            const int   nInternalFaces,
-            const int   nnzExt,
-            const int   totNnz,
-            const int * const owner,
-            const int * const neighbour,
-            const int * const extRows,
-            const int * const extCols,
-                  int * tmpPerm,
-                  int * rowIndTmp,
-                  int * colIndTmp
-        );
-
-        void computeSorting
-        (
-            const int   totNnz,
-            const int * const tmpPerm,
-            const int * const rowIndTmp,
-                    int * rowInd,
-                    int * ldu2csr
-        );
-
-        void localToGlobalColIndices
-        (
-            const int   nRows,
-            const int   nIntFaces,
-            const int   diagIndexGlobal,
-            const int   lowOffGlobal,
-            const int   uppOffGlobal,
-                  int * colIndicesGlobal
-        );
-
-        void applyAddressingPermutation
-        (
-            const int   nCells,
-            const int   totNnz,
-            const int * const ldu2csr,
-            const int * const colIndTmp,
-            const int * const rowInd,
-                  int * colInd,
-                  int * ownStart
-        );
-
+    // Private methods
+           
         void initializeValue
         (
             const int   nCells,
@@ -217,39 +132,8 @@ public:
 
     //- Member Functions
 
-        //- Access to addressing
-
-            //- Return vector of the ownerStart
-            const labelList& ownerStart() const noexcept
-            {
-                return *ownerStartPtr_;
-            }
-
-            //- Return the column index
-            const labelList& colIndices() const noexcept
-            {
-                return *colIndicesPtr_;
-            }
-
-            //- Return the column index
-            const labelList& ldu2csrPerm() const noexcept
-            {
-                return *ldu2csrPerm_;
-            }
-
-            //- Return true if the permutation has been computed
-            bool hasPermutation() const noexcept
-            {
-                return (ldu2csrPerm_);
-            }
-
         //- Access to coefficients
-            const scalarField& values() const;
-
-            virtual const scalar* diagValuesPtr() const
-            {
-                return nullptr;
-            }
+            virtual const scalarField& values() const;
 
             bool hasValues() const noexcept
             {
@@ -279,9 +163,6 @@ public:
                 const lduMatrix& lduMatrix,
                 const scalarField& extVals
             );
-
-            //- Deallocate useless addressing pointer
-            void clearAddressing();
 
             //- Deallocate useless addressing pointer
             void finalize();

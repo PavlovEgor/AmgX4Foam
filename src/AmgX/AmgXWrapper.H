@@ -51,7 +51,7 @@ SourceFiles
 #include "scalar.H"
 #include "label.H"
 #include "IOstreams.H"
-#include "csrMatrix.H"
+#include "csrAdressing.H"
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
@@ -139,7 +139,7 @@ class AmgXWrapper
             const label nLocalRows,
             const label nGlobalRows,
             const label nLocalNz,
-            const csrMatrix* matrix
+            const csrAdressing* matrix
         );
 
 
@@ -158,7 +158,7 @@ class AmgXWrapper
         (
             const label nLocalRows,
             const label nLocalNz,
-            const csrMatrix* matrix
+            const csrAdressing* matrix
         );
 
 

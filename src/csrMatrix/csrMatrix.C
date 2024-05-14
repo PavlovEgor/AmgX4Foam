@@ -36,47 +36,26 @@ License
 
 Foam::csrMatrix::csrMatrix()
 :
-    valuesPtr_(nullptr),
-    ownerStartPtr_(nullptr),
-    colIndicesPtr_(nullptr),
-    ldu2csrPerm_(nullptr)
+    csrAdressing(),
+    valuesPtr_(nullptr)
 {}
 
 Foam::csrMatrix::csrMatrix(const csrMatrix& A)
 :
-    valuesPtr_(nullptr),
-    ownerStartPtr_(nullptr),
-    colIndicesPtr_(nullptr),
-    ldu2csrPerm_(nullptr)
+    csrAdressing(A),
+    valuesPtr_(nullptr)
 {
     if (A.valuesPtr_)
     {
         valuesPtr_ = new scalarField(*(A.valuesPtr_));
-    }
-
-    if (A.ownerStartPtr_)
-    {
-        ownerStartPtr_ = new labelList(*(A.ownerStartPtr_));
-    }
-
-    if (A.colIndicesPtr_)
-    {
-        colIndicesPtr_ = new labelList(*(A.colIndicesPtr_));
-    }
-
-    if (A.ldu2csrPerm_)
-    {
-        ldu2csrPerm_ = new labelList(*(A.ldu2csrPerm_));
     }
 }
 
 
 Foam::csrMatrix::csrMatrix(csrMatrix& A, bool reuse)
 :
-    valuesPtr_(nullptr),
-    ownerStartPtr_(nullptr),
-    colIndicesPtr_(nullptr),
-    ldu2csrPerm_(nullptr)
+    csrAdressing(A, reuse),
+    valuesPtr_(nullptr)
 {
     if (reuse)
     {
@@ -85,45 +64,12 @@ Foam::csrMatrix::csrMatrix(csrMatrix& A, bool reuse)
             valuesPtr_ = A.valuesPtr_;
             A.valuesPtr_ = nullptr;
         }
-
-        if (A.ownerStartPtr_)
-        {
-            ownerStartPtr_ = A.ownerStartPtr_;
-            A.ownerStartPtr_ = nullptr;
-        }
-
-        if (A.colIndicesPtr_)
-        {
-            colIndicesPtr_ = A.colIndicesPtr_;
-            A.colIndicesPtr_ = nullptr;
-        }
-
-        if (A.ldu2csrPerm_)
-        {
-            ldu2csrPerm_ = A.ldu2csrPerm_;
-            A.ldu2csrPerm_ = nullptr;
-        }
     }
     else
     {
         if (A.valuesPtr_)
         {
             valuesPtr_ = new scalarField(*(A.valuesPtr_));
-        }
-
-        if (A.ownerStartPtr_)
-        {
-            ownerStartPtr_ = new labelList(*(A.ownerStartPtr_));
-        }
-
-        if (A.colIndicesPtr_)
-        {
-            colIndicesPtr_ = new labelList(*(A.colIndicesPtr_));
-        }
-
-        if (A.ldu2csrPerm_)
-        {
-            ldu2csrPerm_ = new labelList(*(A.ldu2csrPerm_));
         }
     }
 }
@@ -135,21 +81,6 @@ void Foam::csrMatrix::finalize()
     if (valuesPtr_)
     {
         delete valuesPtr_;
-    }
-
-    if (ownerStartPtr_)
-    {
-        // delete ownerStartPtr_;
-    }
-
-    if (colIndicesPtr_)
-    {
-        // delete colIndicesPtr_;
-    }
-
-    if (ldu2csrPerm_)
-    {
-        delete ldu2csrPerm_;
     }
 }
 
@@ -168,159 +99,6 @@ const Foam::scalarField& Foam::csrMatrix::values() const
 
 
 // * * * * * * * * * * * * * * * * Operations * * * * * * * * * * * * * * * //
-
-//- Deallocate useless addressing pointer
-void Foam::csrMatrix::clearAddressing()
-{
-    if (ownerStartPtr_)
-    {
-        delete ownerStartPtr_;
-        // cudaFree(ownerStartPtr_);
-    }
-
-    if (colIndicesPtr_)
-    {
-        delete colIndicesPtr_;
-    }
-}
-
-
-//- Find permutation array and new addressing vectors (no interface)
-void Foam::csrMatrix::computePermutation(const lduAddressing * addr)
-{
-    const labelList& own = addr->lowerAddr();
-    const labelList& neigh = addr->upperAddr();
-    
-    const label nCells = addr->size();
-    const label nIntFaces = own.size();
-    const label totNnz = nCells + 2*nIntFaces;
-
-    ownerStartPtr_ = new labelList(nCells+1, Foam::Zero);
-    ldu2csrPerm_ = new labelList(totNnz);
-    colIndicesPtr_ = new labelList(totNnz);
-
-    labelList rowIndices(totNnz);
-    labelList tmpPerm(totNnz);
-    labelList rowindicesTmp(totNnz);
-    labelList colindicesTmp(totNnz);
-
-    // Initialize: tmpPerm = [0, 1, ... totNnz-1]
-    //             rowindicesTmp = [0, ... nCells-1, (owner), (neighbour)]
-    //             colindicesTmp = [0, ... nCells-1, (neighbour), (owner)]
-    initializeAddressing
-    (
-        nCells,
-        nIntFaces,
-        totNnz,
-        own.cdata(),
-        neigh.cdata(),
-        tmpPerm.data(),
-        rowindicesTmp.data(),
-        colindicesTmp.data()
-    );
-
-    // Compute sorting to obtain permutation
-    computeSorting
-    (
-        totNnz,
-        tmpPerm.data(),
-        rowindicesTmp.data(),
-        rowIndices.data(),
-        ldu2csrPerm_->data()
-    );
-
-    // Apply permutation vector to find colIndices + compute ownerStart
-    applyAddressingPermutation
-    (
-        nCells,
-        totNnz,
-        ldu2csrPerm_->cdata(),
-        colindicesTmp.cdata(),
-        rowIndices.cdata(),
-        colIndicesPtr_->data(),
-        ownerStartPtr_->data()
-    );
-}
-
-//- Find permutation array and new addressing vectors
-void Foam::csrMatrix::computePermutation
-(
-    const lduAddressing * addr,
-    const label diagIndexGlobal,
-    const label lowOffGlobal,
-    const label uppOffGlobal,
-    const labelList& extRows,
-    const labelList& extCols
-)
-{
-    const labelList& own = addr->lowerAddr();
-    const labelList& neigh = addr->upperAddr();
-    
-    const label nCells = addr->size();
-    const label nIntFaces = own.size();
-    const label nnzExt = extRows.size();
-    const label totNnz = nCells + 2*nIntFaces + nnzExt;
-
-    ownerStartPtr_ = new labelList(nCells+1, Foam::Zero);
-    ldu2csrPerm_ = new labelList(totNnz);
-    colIndicesPtr_ = new labelList(totNnz);
-
-    labelList rowIndices(totNnz);
-    labelList tmpPerm(totNnz);
-    labelList rowindicesTmp(totNnz);
-    labelList colindicesTmp(totNnz);
-
-    // Initialize: tmpPerm = [0, 1, ... totNnz-1]
-    //             rowindicesTmp = [0, ... nCells-1, (owner), (neighbour), (extrows)]
-    //             colindicesTmp = [0, ... nCells-1, (neighbour), (owner), (extcols)]
-    initializeAddressingExt
-    (
-        nCells,
-        nIntFaces,
-        nnzExt,
-        totNnz,
-        own.cdata(),
-        neigh.cdata(),
-        extRows.cdata(),
-        extCols.cdata(),
-        tmpPerm.data(),
-        rowindicesTmp.data(),
-        colindicesTmp.data()
-    );
-
-    // Compute sorting to obtain permutation
-    computeSorting
-    (
-        totNnz,
-        tmpPerm.data(),
-        rowindicesTmp.data(),
-        rowIndices.data(),
-        ldu2csrPerm_->data()
-    );
-
-    // Make column indices from local to global
-    localToGlobalColIndices
-    (
-        nCells,
-        nIntFaces,
-        diagIndexGlobal,
-        lowOffGlobal,
-        uppOffGlobal,
-        colindicesTmp.data()        
-    );
-
-    // Apply permutation vector to find colIndices + compute ownerStart
-    applyAddressingPermutation
-    (
-        nCells,
-        totNnz,
-        ldu2csrPerm_->cdata(),
-        colindicesTmp.cdata(),
-        rowIndices.cdata(),
-        colIndicesPtr_->data(),
-        ownerStartPtr_->data()
-    );
-}
 
 //- Apply permutation to LDU values (no permutation)
 void Foam::csrMatrix::applyPermutation(const lduMatrix& lduMatrix)

@@ -39,8 +39,6 @@ SourceFiles
 
 #include "linearSolverContext.H"
 #include "uncollatedFileOperation.H"
-#include "lduMatrix.H"
-#include "csrMatrix.H"
 #include "AmgXWrapper.H"
 
 
@@ -50,12 +48,14 @@ namespace Foam
 {
 
 // Forward Declarations
+template <class matrix>
 class AmgXLinearSolverContext;
 
 /*---------------------------------------------------------------------------*\
                      Class AmgXLinearSolverContext Declaration
 \*---------------------------------------------------------------------------*/
 
+template <class matrix>
 class AmgXLinearSolverContext
 :
     public linearSolverContext
@@ -148,7 +148,7 @@ public:
     //- Public Members
 
         AmgXWrapper amgx_;
-        csrMatrix Amat_;
+        matrix Amat_;
 
         static const word packageName;
 

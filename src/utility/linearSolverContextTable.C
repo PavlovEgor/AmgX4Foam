@@ -27,6 +27,7 @@ License
 
 #include "linearSolverContextTable.H"
 #include "AmgXLinearSolverContext.H"
+#include "csrMatrix.H"
 
 // * * * * * * * * * * * * * * Static Data Members * * * * * * * * * * * * * //
 
@@ -34,10 +35,11 @@ namespace Foam
 {
     defineTemplateTypeNameAndDebugWithName
     (
-        linearSolverContextTable<AmgXLinearSolverContext>,
+        linearSolverContextTable<AmgXLinearSolverContext<csrMatrix>>,
         "AmgXCsrLinearSolverContextTable",
         0
     );
+
 
 } // End namespace Foam
 
