@@ -190,7 +190,7 @@ public:
         //- Access to addressing
 
             //- Number of blocks
-            const label nBlocks()
+            const label& nBlocks() const
             {
                 return nBlocks_;
             }

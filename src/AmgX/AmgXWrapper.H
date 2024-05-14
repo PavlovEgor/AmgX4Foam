@@ -136,9 +136,7 @@ class AmgXWrapper
          */
         void setOperator
         (
-            const label nLocalRows,
             const label nGlobalRows,
-            const label nLocalNz,
             const csrAdressing* matrix
         );
 
@@ -156,8 +154,6 @@ class AmgXWrapper
          */
         void updateOperator
         (
-            const label nLocalRows,
-            const label nLocalNz,
             const csrAdressing* matrix
         );
 
@@ -177,9 +173,9 @@ class AmgXWrapper
          */
         void solve
         (
-            const label nLocalRows,
             scalar* pscalar,
-            const scalar* bscalar
+            const scalar* bscalar,
+            const csrAdressing* matrix
         );
 
         /** \brief Get the number of iterations of the last solving.
@@ -199,7 +195,7 @@ class AmgXWrapper
         void getResidual
         (
             const label &iter,
-            scalar &res
+            scalarField &res
         );
 
 

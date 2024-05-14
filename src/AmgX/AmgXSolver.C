@@ -322,30 +322,30 @@ Foam::solverPerformance Foam::AmgXSolver::solve
     {
         Info<< "Initializing AmgX Linear Solver " << eqName_ << nl;
 
-        amgx.setOperator(nCells, nGlobalCells, nnz, &Amat);
+        amgx.setOperator(nGlobalCells, &Amat);
 
-        Amat.clearAddressing();
+        // Amat.clearAddressing();
 
         ctx.initialized() = true;
     }
     else
     {
-        amgx.updateOperator(nCells, nnz, &Amat);
+        amgx.updateOperator(&Amat);
     }
 
-    amgx.solve(nCells, psi.data(), source.cdata());
+    amgx.solve(psi.data(), source.cdata(), &Amat);
 
-    scalar iNorm = 0.0;
+    scalarField iNorm(1, 0.0);
     amgx.getResidual(0, iNorm);
-    ctx.performance.initialResidual() = iNorm;
+    ctx.performance.initialResidual() = iNorm[0];
 
     label nIters = 0;
     amgx.getIters(nIters);
     ctx.performance.nIterations() = nIters;
 
-    scalar fNorm = 0.0;
+    scalarField fNorm(1, 0.0);
     amgx.getResidual(nIters, fNorm);
-    ctx.performance.finalResidual() = fNorm;
+    ctx.performance.finalResidual() = fNorm[0];
 
     return ctx.performance;
     

@@ -250,12 +250,14 @@ void Foam::AmgXWrapper::finalize()
 /* \implements AmgXWrapper::setOperator */
 void Foam::AmgXWrapper::setOperator
 (
-    const label nLocalRows,
     const label nGlobalRows,
-    const label nLocalNz,
     const csrAdressing* matrix
 )
 {
+    const label nLocalRows = matrix->ownerStart().size() - 1;
+    const label nLocalNz = matrix->colIndices().size();
+    const label nBlocks = matrix->nBlocks();
+    
     //- Check the matrix size is not larger than tolerated by AmgX
     if(nLocalRows > std::numeric_limits<int>::max())
     {
@@ -300,7 +302,7 @@ void Foam::AmgXWrapper::setOperator
     if (!Pstream::parRun())
     {
         AMGX_matrix_upload_all(
-            AmgXA, nLocalRows, nLocalNz, 1, 1,
+            AmgXA, nLocalRows, nLocalNz, nBlocks, nBlocks,
             ownStart, colInd, matValues, nullptr);
     }
     else
@@ -328,8 +330,8 @@ void Foam::AmgXWrapper::setOperator
         AMGX_distribution_set_32bit_colindices(dist, true);
 
         AMGX_matrix_upload_distributed(
-            AmgXA, nGlobalRows, nLocalRows, nLocalNz, 1, 1, ownStart,
-            colInd, matValues, nullptr, dist);
+            AmgXA, nGlobalRows, nLocalRows, nLocalNz, nBlocks, nBlocks,
+            ownStart, colInd, matValues, nullptr, dist);
 
         AMGX_distribution_destroy(dist);
     }
@@ -346,11 +348,11 @@ void Foam::AmgXWrapper::setOperator
 /* \implements AmgXWrapper::updateOperator */
 void Foam::AmgXWrapper::updateOperator
 (
-    const label nLocalRows,
-    const label nLocalNz,
     const csrAdressing* matrix
 )
 {
+    const label nLocalRows = matrix->ownerStart().size() - 1;
+    const label nLocalNz = matrix->values().size();
     const void * matValues = matrix->values().cdata();
 
     //- Replace the coefficients for the CSR matrix A within AmgX
@@ -364,15 +366,17 @@ void Foam::AmgXWrapper::updateOperator
 /* \implements AmgXWrapper::solve */
 void Foam::AmgXWrapper::solve
 (
-    const label nLocalRows,
     scalar* pscalar,
-    const scalar* bscalar
+    const scalar* bscalar,
+    const csrAdressing* matrix
 )
 {
+    const label nLocalRows = matrix->ownerStart().size() - 1;
+    const int nBlocks = matrix->nBlocks();
     
     //- Upload vectors to AmgX
-    AMGX_vector_upload(AmgXP, nLocalRows, 1, pscalar);
-    AMGX_vector_upload(AmgXRHS, nLocalRows, 1, bscalar);
+    AMGX_vector_upload(AmgXP, nLocalRows, nBlocks, pscalar);
+    AMGX_vector_upload(AmgXRHS, nLocalRows, nBlocks, bscalar);
 
     //- Solve
     AMGX_solver_solve(solver, AmgXRHS, AmgXP);
@@ -402,9 +406,9 @@ void Foam::AmgXWrapper::getIters(label &iter)
 
 
 /* \implements AmgXWrapper::getResidual */
-void Foam::AmgXWrapper::getResidual(const label &iter, scalar &res)
+void Foam::AmgXWrapper::getResidual(const label &iter, scalarField &res)
 {
-    AMGX_solver_get_iteration_residual(solver, iter, 0, &res);
+    AMGX_solver_get_iteration_residual(solver, iter, 0, res.data());
 }
 
 
