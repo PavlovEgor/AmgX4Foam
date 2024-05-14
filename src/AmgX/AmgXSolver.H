@@ -75,18 +75,18 @@ class AmgXSolver
         void operator=(const AmgXSolver&) = delete;
 
         //- Compute matrix addressing and value permutation for AmgX use
-        /*void buildAndApplyMatrixPermutation
+        void buildAndApplyMatrixPermutation
         (
-            deviceCsrMatrix* csrMatrix,
+            csrMatrix& csrMatrix,
             label& nRowsGlobal
-        ) const;*/
+        ) const;
 
         //- Compute matrix value permutation for AmgX use
-        /*void applyMatrixPermutation
+        void applyMatrixPermutation
         (
-            deviceCsrMatrix* csrMatrix,
+            csrMatrix& csrMatrix,
             label& nRowsGlobal
-        ) const;*/
+        ) const;
 
 
 public:

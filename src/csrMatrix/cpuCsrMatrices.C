@@ -72,18 +72,17 @@ inline void Foam::csrMatrix::initializeValueExt
 {
     // Initialize valuesTmp = [(diag), (upper), (lower), (extValues)]
 
-    for(int i=0; i<nCells; ++i)
-    {
-        valuesTmp[i] = diag[i];
-    }
+    initializeValue
+    (
+        nCells,
+        nIntFaces,
+        diag,
+        upper,
+        lower,
+        valuesTmp
+    );
 
-    for(int i=0; i<nIntFaces; ++i)
-    {
-        valuesTmp[nCells + i] = upper[i];
-        valuesTmp[nCells + nIntFaces + i] = lower[i];
-    }
-
-    for(int i=0; i<nIntFaces; ++i)
+    for(int i=0; i<nnzExt; ++i)
     {
         valuesTmp[nCells + 2*nIntFaces + i] = extValue[i];
     }

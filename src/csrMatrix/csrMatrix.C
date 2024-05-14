@@ -160,7 +160,8 @@ void Foam::csrMatrix:: applyPermutation
     // Verify that the permutation has already been computed
     if(!ldu2csrPerm_)
     {
-        computePermutation(
+        computePermutation
+        (
             &(lduMatrix.lduAddr()),
             diagIndexGlobal,
             lowOffGlobal,

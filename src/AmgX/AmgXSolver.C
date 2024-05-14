@@ -79,29 +79,29 @@ Foam::AmgXSolver::AmgXSolver
 // * * * * * * * * * * * * * * * Member Functions  * * * * * * * * * * * * * //
 
 //- construct the matrix for AmgX
-/*void Foam::AmgXSolver::buildAndApplyMatrixPermutation
+void Foam::AmgXSolver::buildAndApplyMatrixPermutation
 (
-    deviceCsrMatrix* csrMatrix,
+    csrMatrix& csrMatrix,
     label& nRowsGlobal
 ) const
 {
-    const lduInterfacePtrsList interfaces(this->matrix_.mesh().openFoamMesh().interfaces());
+    const lduInterfacePtrsList& interfaces(this->matrix_.mesh().interfaces());
+    const lduAddressing& lduAddr = matrix_.lduAddr();
+    const labelUList& own = lduAddr.lowerAddr();
+    const labelUList& neigh = lduAddr.upperAddr();
 
     // Local degrees-of-freedom i.e. number of local rows
-    const label nLocalRows = this->matrix_.mesh().nCells();
-    label nRowsLocal = nLocalRows;
-    nRowsGlobal = returnReduce(nRowsLocal, sumOp<label>());
+    const label nLocalRows = lduAddr.size();
+    nRowsGlobal = returnReduce(nLocalRows, sumOp<label>());
 
     // Number of internal faces (connectivity)
-    const label nIntFaces = this->matrix_.mesh().nInternalFaces();
+    const label nIntFaces = own.size();
 
     const globalIndex globalNumbering(nLocalRows);
 
     const label diagIndexGlobal = globalNumbering.toGlobal(0);
-    const label firstLowerInd = this->matrix_.mesh().openFoamMesh().owner()[0]; //lower.cdata()[0];
-    label lowOffGlobal = globalNumbering.toGlobal(firstLowerInd) - firstLowerInd;
-    const label firstUpperInd = this->matrix_.mesh().openFoamMesh().neighbour()[0]; // upper.cdata()[0];
-    label uppOffGlobal = globalNumbering.toGlobal(firstUpperInd) - firstUpperInd;
+    label lowOffGlobal = globalNumbering.toGlobal(own[0]) - own[0];
+    label uppOffGlobal = globalNumbering.toGlobal(neigh[0]) - neigh[0];
 
     labelList globalCells
     (
@@ -113,7 +113,7 @@ Foam::AmgXSolver::AmgXSolver
     );
 
     // Connections to neighbouring processors
-    const label nReq = Pstream::nRequests();
+    const label nReq = Pstream::nRequests(); //Operation useless if the mesh is steady
 
     label nProcValues = 0;
 
@@ -122,7 +122,7 @@ Foam::AmgXSolver::AmgXSolver
     {
         if (interfaces.set(patchi))
         {
-            nProcValues += interfaces[patchi].faceCells().size(); //lduAddr.patchAddr(patchi).size();
+            nProcValues += lduAddr.patchAddr(patchi).size();
 
             interfaces[patchi].initInternalFieldTransfer
             (
@@ -137,9 +137,9 @@ Foam::AmgXSolver::AmgXSolver
         Pstream::waitRequests(nReq);
     }
 
-    deviceField<label> procRows(nProcValues, 0);
-    deviceField<label> procCols(nProcValues, 0);
-    deviceField<scalar> procVals(nProcValues, Foam::Zero);
+    labelField procRows(nProcValues, Foam::Zero);
+    labelField procCols(nProcValues, Foam::Zero);
+    scalarField procVals(nProcValues, Foam::Zero);
     nProcValues = 0;
 
     forAll(interfaces, patchi)
@@ -147,9 +147,9 @@ Foam::AmgXSolver::AmgXSolver
         if (interfaces.set(patchi))
         {
             // Processor-local values
-            const label len = interfaces[patchi].faceCells().size();
-            const deviceField<label> faceCells(len, interfaces[patchi].faceCells().cdata());
-            const deviceField<scalar>& bCoeffs = this->interfaceBouCoeffs_[patchi];
+            const labelUList& faceCells = lduAddr.patchAddr(patchi);
+            const label len = faceCells.size();
+            const scalarField& bCoeffs = interfaceBouCoeffs_[patchi];
 
             labelList nbrCells
             (
@@ -169,9 +169,9 @@ Foam::AmgXSolver::AmgXSolver
                     << exit(FatalError);
             }
 
-            procRows.copy(faceCells, nProcValues, 0);
-            procCols.copyIn(nbrCells, len, nProcValues);
-            procVals.copy(bCoeffs, nProcValues, 0);
+            procRows.append(faceCells);
+            procCols.append(nbrCells);
+            procVals.append(bCoeffs);
 
             nProcValues += len;
         }
@@ -179,9 +179,9 @@ Foam::AmgXSolver::AmgXSolver
 
     procVals.negate();  // Change sign for entire field (see previous note)
 
-    csrMatrix->applyPermutation
+    csrMatrix.applyPermutation
     (
-        this->matrix_,
+        matrix_,
         diagIndexGlobal,
         lowOffGlobal,
         uppOffGlobal,
@@ -198,19 +198,18 @@ Foam::AmgXSolver::AmgXSolver
 //- construct the matrix for AmgX
 void Foam::AmgXSolver::applyMatrixPermutation
 (
-    deviceCsrMatrix* csrMatrix,
+    csrMatrix& csrMatrix,
     label& nRowsGlobal
 ) const
 {
-    const UPtrList<const devicelduInterfaceField>& interfaces = this->interfaces_;
+    // UPtrList<const devicelduInterfaceField>& interfaces = this->interfaces_;
 
     // Local degrees-of-freedom i.e. number of local rows
-    const label nLocalRows = this->matrix_.mesh().nCells();
-    label nRowsLocal = nLocalRows;
-    nRowsGlobal = returnReduce(nRowsLocal, sumOp<label>());
+    const label nLocalRows = matrix_.lduAddr().size();
+    nRowsGlobal = returnReduce(nLocalRows, sumOp<label>());
 
     //- Number of internal faces (connectivity)
-    const label nIntFaces = this->matrix_.mesh().nInternalFaces();
+    const label nIntFaces = matrix_.lduAddr().lowerAddr().size();
 
     //- Connections to neighbouring processors
     const label nReq = Pstream::nRequests();
@@ -218,9 +217,9 @@ void Foam::AmgXSolver::applyMatrixPermutation
     label nProcValues = 0;
 
     // Initialise transfer of global cells
-    forAll(interfaces, patchi)
+    forAll(interfaces_, patchi)
     {
-        if (interfaces.set(patchi)) nProcValues += this->interfaceBouCoeffs_[patchi].size();
+        if (interfaces_.set(patchi)) nProcValues += interfaceBouCoeffs_[patchi].size();
     }
 
     if (Pstream::parRun())
@@ -228,18 +227,18 @@ void Foam::AmgXSolver::applyMatrixPermutation
         Pstream::waitRequests(nReq);
     }
 
-    deviceField<scalar> procVals(nProcValues, Foam::Zero);
+    scalarField procVals(nProcValues, Foam::Zero);
     nProcValues = 0;
 
-    forAll(interfaces, patchi)
+    forAll(interfaces_, patchi)
     {
-        if (interfaces.set(patchi))
+        if (interfaces_.set(patchi))
         {
             //- Processor-local values
-            const deviceField<scalar>& bCoeffs = this->interfaceBouCoeffs_[patchi];
+            const scalarField& bCoeffs = interfaceBouCoeffs_[patchi];
             const label len = bCoeffs.size();
 
-            procVals.copy(bCoeffs, nProcValues, 0);
+            procVals.append(bCoeffs);
 
             nProcValues += len;
         }
@@ -247,15 +246,15 @@ void Foam::AmgXSolver::applyMatrixPermutation
 
     procVals.negate();  // Change sign for entire field (see previous note)
 
-    csrMatrix->applyPermutation
+    csrMatrix.applyPermutation
     (
-        this->matrix_,
+        matrix_,
         procVals
     );
 
     DebugInfo<< "Converted LDU matrix values to CSR format" << nl;
 
-}*/
+}
 
 
 Foam::solverPerformance Foam::AmgXSolver::solve
@@ -264,10 +263,10 @@ Foam::solverPerformance Foam::AmgXSolver::solve
     const scalarField& source,
     const direction cmpt
 ) const
-{
+{   
     solverPerformance solverPerf
     (
-        "AmgX", //lduMatrix::preconditioner::getName(controlDict_) + typeName,
+        typeName,
         this->fieldName_
     );
 
@@ -299,11 +298,11 @@ Foam::solverPerformance Foam::AmgXSolver::solve
         nGlobalCells = nCells;
         Amat.applyPermutation(this->matrix_);
     }
-    /*else
+    else
     {
-        if(!Amat.hasPermutation()) buildAndApplyMatrixPermutation(&Amat, nGlobalCells);
-        else applyMatrixPermutation(&Amat, nGlobalCells);
-    }*/
+        if(!Amat.hasPermutation()) buildAndApplyMatrixPermutation(Amat, nGlobalCells);
+        else applyMatrixPermutation(Amat, nGlobalCells);
+    }
 
     label nnz = Amat.values().size();
 

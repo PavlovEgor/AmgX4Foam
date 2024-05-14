@@ -91,29 +91,17 @@ inline void Foam::csrAdressing::initializeAddressingExt
           int * colIndTmp
 )
 {
-    // Initialize tmpPerm = [0, 1, ... totNnz-1]
-    for (int i = 0; i < totNnz; ++i)
-    {
-        tmpPerm[i] = i;
-    }
-
-    // Initialize: rowindicesTmp = [0, ... nCells-1, (owner), (neighbour), (extrows)]
-    //             colindicesTmp = [0, ... nCells-1, (neighbour), (owner), (extcols)]
-
-    for(int i=0; i<nCells; ++i)
-    {
-        rowIndTmp[i] = i;
-        colIndTmp[i] = i;
-    }
-
-    for(int i=0; i<nInternalFaces; ++i)
-    {
-        rowIndTmp[nCells + i] = owner[i];
-        colIndTmp[nCells + i] = neighbour[i];
-
-        rowIndTmp[nCells + nInternalFaces + i] = neighbour[i];
-        colIndTmp[nCells + nInternalFaces + i] = owner[i];
-    }
+    initializeAddressing
+    (
+        nCells,
+        nInternalFaces,
+        totNnz,
+        owner,
+        neighbour,
+        tmpPerm,
+        rowIndTmp,
+        colIndTmp
+    );
 
     for(int i=0; i<nnzExt; ++i)
     {
