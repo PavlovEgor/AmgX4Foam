@@ -189,6 +189,12 @@ public:
 
         //- Access to addressing
 
+            //- Number of blocks
+            const label nBlocks()
+            {
+                return nBlocks_;
+            }
+
             //- Return vector of the ownerStart
             const labelList& ownerStart() const noexcept
             {
@@ -219,8 +225,11 @@ public:
 
         //- Operations
 
-            //- Apply permutation from LDU to CSR
-            virtual void applyPermutation(const lduMatrix& lduMatrix) = 0;
+            //- Set number of blocks
+            void setNblocks(label n)
+            {
+                nBlocks_ = n;
+            }
 
             //- Deallocate useless addressing pointer
             void clearAddressing();

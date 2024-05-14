@@ -143,10 +143,10 @@ public:
         //- Operations
 
             //- Apply permutation from LDU to CSR
-            virtual void applyPermutation(const lduMatrix& lduMatrix);
+            void applyPermutation(const lduMatrix& lduMatrix);
 
             //- Apply permutation from LDU to CSR considering the interface values
-            virtual void applyPermutation
+            void applyPermutation
             (
                 const lduMatrix& lduMatrix,
                 const label diagIndexGlobal,
@@ -158,7 +158,7 @@ public:
             );
 
             //- Apply permutation from LDU to CSR considering the interface values
-            virtual void applyPermutation
+            void applyPermutation
             (
                 const lduMatrix& lduMatrix,
                 const scalarField& extVals
