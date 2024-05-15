@@ -256,6 +256,97 @@ void Foam::csrMatrix:: applyPermutation
     );
 }
 
+
+//- Apply permutation from LDU to CSR considering the interface values
+void Foam::csrMatrix:: applyPermutation
+(
+    const lduMatrix& lduMatrix,
+    const FieldField<Field, scalar> interfaceBouCoeffs,
+          label& nGlobalCells
+)
+{
+    label nnzExt = 0;
+    const lduInterfacePtrsList& interfaces(lduMatrix.mesh().interfaces());
+
+    // Verify that the permutation has already been computed
+    if(!ldu2csrPerm_)
+    {
+        computePermutation
+        (
+            lduMatrix.lduAddr(),
+            interfaces,
+            nnzExt
+        );
+    }
+    else
+    {
+        forAll(interfaces, patchi)
+        {
+            if (interfaces.set(patchi)) nnzExt += interfaceBouCoeffs[patchi].size();
+        }
+    }
+
+    scalarField extVals(nnzExt, Foam::Zero);
+
+    nnzExt = 0;
+
+    forAll(interfaces, patchi)
+    {
+        if (interfaces.set(patchi))
+        {
+            //- Processor-local values
+            const scalarField& bCoeffs = interfaceBouCoeffs[patchi];
+            const label len = bCoeffs.size();
+
+            SubList<scalar>(extVals, len, nnzExt) = bCoeffs;
+            nnzExt += len;
+        }
+    }
+
+    extVals.negate();
+
+    const scalarField& diag = lduMatrix.diag();
+    const scalarField& upper = lduMatrix.upper();
+    const scalarField& lower = lduMatrix.lower();
+
+    label nIntFaces = upper.size();
+    label nCells = diag.size();
+    label totNnz = nCells + 2*nIntFaces + nnzExt;
+
+    //- Compute global number of equations
+    nGlobalCells = returnReduce(nCells, sumOp<label>());
+
+    if(!valuesPtr_)
+    {
+        valuesPtr_ = new scalarField(totNnz);
+    }
+
+    // Initialize valuesTmp = [(diag), (upper), (lower), (extValues)]
+    scalarField valuesTmp(totNnz);
+
+    initializeValueExt
+    (
+        nCells,
+        nIntFaces,
+        nnzExt,
+        diag.cdata(),
+        upper.cdata(),
+        lower.cdata(),
+        extVals.cdata(),
+        valuesTmp.data()
+    );
+
+    // Apply permutation
+    applyValuePermutation
+    (
+        totNnz,
+        ldu2csrPerm_->cdata(),
+        valuesTmp.cdata(),
+        valuesPtr_->data()
+    );
+}
+
+
 // * * * * * * * * * * * * * Explicit instantiations  * * * * * * * * * * * //
 
 // ************************************************************************* //

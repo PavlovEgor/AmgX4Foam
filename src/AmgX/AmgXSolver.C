@@ -35,8 +35,8 @@ License
 
 #include "globalIndex.H"
 
-// #include <iostream>
-// #include <fstream>
+#include <iostream>
+#include <fstream>
 
 // * * * * * * * * * * * * * * Static Data Members * * * * * * * * * * * * * //
 
@@ -169,10 +169,9 @@ void Foam::AmgXSolver::buildAndApplyMatrixPermutation
                     << exit(FatalError);
             }
 
-            procRows.append(faceCells);
-            procCols.append(nbrCells);
-            procVals.append(bCoeffs);
-
+            SubList<label>(procRows, len, nProcValues) = faceCells;
+            SubList<label>(procCols, len, nProcValues) = nbrCells;
+            SubList<scalar>(procVals, len, nProcValues) = bCoeffs;
             nProcValues += len;
         }
     }
@@ -300,22 +299,32 @@ Foam::solverPerformance Foam::AmgXSolver::solve
     }
     else
     {
-        if(!Amat.hasPermutation()) buildAndApplyMatrixPermutation(Amat, nGlobalCells);
-        else applyMatrixPermutation(Amat, nGlobalCells);
+        // buildAndApplyMatrixPermutation(Amat, nGlobalCells);
+        /*if(!Amat.hasPermutation()) buildAndApplyMatrixPermutation(Amat, nGlobalCells);
+        else applyMatrixPermutation(Amat, nGlobalCells);*/
+        Amat.applyPermutation(matrix_, interfaceBouCoeffs_, nGlobalCells);
     }
 
     label nnz = Amat.values().size();
 
     //- Print matrix converted to check
-    /*string fileName = "csrMatrix-cpu";
-    std::ofstream outFile(fileName, std::ios_base::app);
-    outFile << "ownerStart:" << nl;
-    for(int i=0; i< nCells; ++i) outFile << Amat.ownerStart().cdata()[i] << nl;
-    outFile << nl << "colIndeces:" << nl;
-    for(int i=0; i< nnz; ++i) outFile << Amat.colIndices().cdata()[i] << nl;
-    outFile << nl << "colIndeces:" << nl;
-    for(int i=0; i< nnz; ++i) outFile << Amat.values().cdata()[i] << nl;
-    outFile.close();*/
+    string fileName = "ownStart-cpu" + std::to_string(Pstream::myProcNo());
+    std::ofstream outFile1(fileName); //, std::ios_base::app);
+    outFile1 << "ownerStart:" << nl;
+    for(int i=0; i< nCells+1; ++i) outFile1 << Amat.ownerStart().cdata()[i] << nl;
+    outFile1.close();
+
+    fileName = "colIndices-cpu" + std::to_string(Pstream::myProcNo());
+    std::ofstream outFile2(fileName);
+    outFile2 << nl << "colIndeces:" << nl;
+    for(int i=0; i< nnz; ++i) outFile2 << Amat.colIndices().cdata()[i] << nl;
+    outFile2.close();
+
+    fileName = "values-cpu" + std::to_string(Pstream::myProcNo());
+    std::ofstream outFile3(fileName);
+    outFile3 << nl << "values:" << nl;
+    for(int i=0; i< nnz; ++i) outFile3 << Amat.values().cdata()[i] << nl;
+    outFile3.close();
 
     if(!ctx.initialized())
     {

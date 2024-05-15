@@ -149,6 +149,13 @@ public:
             void applyPermutation
             (
                 const lduMatrix& lduMatrix,
+                const FieldField<Field, scalar> interfaceBouCoeffs,
+                      label& nGlobalCells
+            );
+
+            void applyPermutation
+            (
+                const lduMatrix& lduMatrix,
                 const label diagIndexGlobal,
                 const label lowOffGlobal,
                 const label uppOffGlobal,

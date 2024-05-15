@@ -142,10 +142,9 @@ protected:
         );
 
         //- Computation of the permutatrion array
-        virtual void computePermutation(const lduAddressing * addr);
+        void computePermutation(const lduAddressing * addr);
 
-        //- Computation of the permutatrion array
-        virtual void computePermutation
+        void computePermutation
         (
             const lduAddressing * addr,
             const label diagIndexGlobal,
@@ -153,6 +152,14 @@ protected:
             const label uppOffGlobal,
             const labelList& extRows,
             const labelList& extCols
+        );
+
+        //- Computation of the permutatrion array
+        void computePermutation
+        (
+            const lduAddressing& addr,
+            const lduInterfacePtrsList& interfaces,
+                  label& nExtNz
         );
 
 public:

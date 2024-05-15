@@ -28,6 +28,8 @@ License
 
 #include "csrAdressing.H"
 
+#include "globalIndex.H"
+
 // * * * * * * * * * * * * * * Static Data Members * * * * * * * * * * * * * //
 
 
@@ -220,6 +222,165 @@ void Foam::csrAdressing::computePermutation
     const label nCells = addr->size();
     const label nIntFaces = own.size();
     const label nnzExt = extRows.size();
+    const label totNnz = nCells + 2*nIntFaces + nnzExt;
+
+    Pout << "nCells = " << nCells << nl;
+    Pout << "nIntFaces = " << nIntFaces << nl;
+    Pout << "nnzExt = " << nnzExt << nl;
+
+    ownerStartPtr_ = new labelList(nCells+1, Foam::Zero);
+    ldu2csrPerm_ = new labelList(totNnz);
+    colIndicesPtr_ = new labelList(totNnz);
+
+    labelList rowIndices(totNnz);
+    labelList tmpPerm(totNnz);
+    labelList rowindicesTmp(totNnz);
+    labelList colindicesTmp(totNnz);
+
+    // Initialize: tmpPerm = [0, 1, ... totNnz-1]
+    //             rowindicesTmp = [0, ... nCells-1, (owner), (neighbour), (extrows)]
+    //             colindicesTmp = [0, ... nCells-1, (neighbour), (owner), (extcols)]
+    initializeAddressingExt
+    (
+        nCells,
+        nIntFaces,
+        nnzExt,
+        totNnz,
+        own.cdata(),
+        neigh.cdata(),
+        extRows.cdata(),
+        extCols.cdata(),
+        tmpPerm.data(),
+        rowindicesTmp.data(),
+        colindicesTmp.data()
+    );
+
+    // Compute sorting to obtain permutation
+    computeSorting
+    (
+        totNnz,
+        tmpPerm.data(),
+        rowindicesTmp.data(),
+        rowIndices.data(),
+        ldu2csrPerm_->data()
+    );
+
+    // Make column indices from local to global
+    localToGlobalColIndices
+    (
+        nCells,
+        nIntFaces,
+        diagIndexGlobal,
+        lowOffGlobal,
+        uppOffGlobal,
+        colindicesTmp.data()        
+    );
+
+    // Apply permutation vector to find colIndices + compute ownerStart
+    applyAddressingPermutation
+    (
+        nCells,
+        totNnz,
+        ldu2csrPerm_->cdata(),
+        colindicesTmp.cdata(),
+        rowIndices.cdata(),
+        colIndicesPtr_->data(),
+        ownerStartPtr_->data()
+    );
+}
+
+
+//- Find permutation array and new addressing vectors
+void Foam::csrAdressing::computePermutation
+(
+    const lduAddressing& addr,
+    const lduInterfacePtrsList& interfaces,
+          label& nnzExt
+)
+{
+    const labelList& own = addr.lowerAddr();
+    const labelList& neigh = addr.upperAddr();
+
+    const label nCells = addr.size();
+    const label nIntFaces = own.size();
+
+    const globalIndex globalNumbering(nCells);
+
+    const label diagIndexGlobal = globalNumbering.toGlobal(0);
+    const label lowOffGlobal = globalNumbering.toGlobal(own[0]) - own[0];
+    const label uppOffGlobal = globalNumbering.toGlobal(neigh[0]) - neigh[0];
+
+    labelList globalCells
+    (
+        identity
+        (
+            globalNumbering.localSize(),
+            globalNumbering.localStart()
+        )
+    );
+
+    // Connections to neighbouring processors
+    const label nReq = Pstream::nRequests(); //Operation useless if the mesh is steady
+
+    nnzExt = 0;
+
+    // Initialise transfer of global cells
+    forAll(interfaces, patchi)
+    {
+        if (interfaces.set(patchi))
+        {
+            nnzExt += addr.patchAddr(patchi).size();
+
+            interfaces[patchi].initInternalFieldTransfer
+            (
+                Pstream::commsTypes::nonBlocking,
+                globalCells
+            );
+        }
+    }
+
+    if (Pstream::parRun())
+    {
+        Pstream::waitRequests(nReq);
+    }
+
+    labelField extRows(nnzExt, Foam::Zero);
+    labelField extCols(nnzExt, Foam::Zero);
+
+    nnzExt = 0;
+    
+    forAll(interfaces, patchi)
+    {
+        if (interfaces.set(patchi))
+        {
+            // Processor-local values
+            const labelUList& faceCells = addr.patchAddr(patchi);
+            const label len = faceCells.size();
+
+            labelList nbrCells
+            (
+                interfaces[patchi].internalFieldTransfer
+                (
+                    Pstream::commsTypes::nonBlocking,
+                    globalCells
+                )
+            );
+
+            if (faceCells.size() != nbrCells.size())
+            {
+                FatalErrorInFunction
+                    << "Mismatch in interface sizes (AMI?)" << nl
+                    << "Have " << faceCells.size() << " != "
+                    << nbrCells.size() << nl
+                    << exit(FatalError);
+            }
+
+            SubList<label>(extRows, len, nnzExt) = faceCells;
+            SubList<label>(extCols, len, nnzExt) = nbrCells;
+            nnzExt += len;
+        }
+    }
+
     const label totNnz = nCells + 2*nIntFaces + nnzExt;
 
     ownerStartPtr_ = new labelList(nCells+1, Foam::Zero);
