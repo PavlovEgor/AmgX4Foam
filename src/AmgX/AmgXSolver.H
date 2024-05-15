@@ -60,10 +60,7 @@ class AmgXSolver
     // Private Member Data
 
         //- Equation name for solver context
-        word eqName_;        
-
-        //- Cached preconditioner
-        // mutable autoPtr<lduMatrix::preconditioner> preconPtr_;
+        word eqName_;
 
 
     // Private Member Functions
@@ -73,20 +70,6 @@ class AmgXSolver
 
         //- No copy assignment
         void operator=(const AmgXSolver&) = delete;
-
-        //- Compute matrix addressing and value permutation for AmgX use
-        void buildAndApplyMatrixPermutation
-        (
-            csrMatrix& csrMatrix,
-            label& nRowsGlobal
-        ) const;
-
-        //- Compute matrix value permutation for AmgX use
-        void applyMatrixPermutation
-        (
-            csrMatrix& csrMatrix,
-            label& nRowsGlobal
-        ) const;
 
 
 public:

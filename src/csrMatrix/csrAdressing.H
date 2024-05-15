@@ -144,16 +144,6 @@ protected:
         //- Computation of the permutatrion array
         void computePermutation(const lduAddressing * addr);
 
-        void computePermutation
-        (
-            const lduAddressing * addr,
-            const label diagIndexGlobal,
-            const label lowOffGlobal,
-            const label uppOffGlobal,
-            const labelList& extRows,
-            const labelList& extCols
-        );
-
         //- Computation of the permutatrion array
         void computePermutation
         (

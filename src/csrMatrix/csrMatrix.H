@@ -153,24 +153,6 @@ public:
                       label& nGlobalCells
             );
 
-            void applyPermutation
-            (
-                const lduMatrix& lduMatrix,
-                const label diagIndexGlobal,
-                const label lowOffGlobal,
-                const label uppOffGlobal,
-                const labelList& extRows,
-                const labelList& extCols,
-                const scalarField& extVals
-            );
-
-            //- Apply permutation from LDU to CSR considering the interface values
-            void applyPermutation
-            (
-                const lduMatrix& lduMatrix,
-                const scalarField& extVals
-            );
-
             //- Deallocate useless addressing pointer
             void finalize();
 

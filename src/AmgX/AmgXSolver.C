@@ -78,184 +78,6 @@ Foam::AmgXSolver::AmgXSolver
 
 // * * * * * * * * * * * * * * * Member Functions  * * * * * * * * * * * * * //
 
-//- construct the matrix for AmgX
-void Foam::AmgXSolver::buildAndApplyMatrixPermutation
-(
-    csrMatrix& csrMatrix,
-    label& nRowsGlobal
-) const
-{
-    const lduInterfacePtrsList& interfaces(this->matrix_.mesh().interfaces());
-    const lduAddressing& lduAddr = matrix_.lduAddr();
-    const labelUList& own = lduAddr.lowerAddr();
-    const labelUList& neigh = lduAddr.upperAddr();
-
-    // Local degrees-of-freedom i.e. number of local rows
-    const label nLocalRows = lduAddr.size();
-    nRowsGlobal = returnReduce(nLocalRows, sumOp<label>());
-
-    // Number of internal faces (connectivity)
-    const label nIntFaces = own.size();
-
-    const globalIndex globalNumbering(nLocalRows);
-
-    const label diagIndexGlobal = globalNumbering.toGlobal(0);
-    label lowOffGlobal = globalNumbering.toGlobal(own[0]) - own[0];
-    label uppOffGlobal = globalNumbering.toGlobal(neigh[0]) - neigh[0];
-
-    labelList globalCells
-    (
-        identity
-        (
-            globalNumbering.localSize(),
-            globalNumbering.localStart()
-        )
-    );
-
-    // Connections to neighbouring processors
-    const label nReq = Pstream::nRequests(); //Operation useless if the mesh is steady
-
-    label nProcValues = 0;
-
-    // Initialise transfer of global cells
-    forAll(interfaces, patchi)
-    {
-        if (interfaces.set(patchi))
-        {
-            nProcValues += lduAddr.patchAddr(patchi).size();
-
-            interfaces[patchi].initInternalFieldTransfer
-            (
-                Pstream::commsTypes::nonBlocking,
-                globalCells
-            );
-        }
-    }
-
-    if (Pstream::parRun())
-    {
-        Pstream::waitRequests(nReq);
-    }
-
-    labelField procRows(nProcValues, Foam::Zero);
-    labelField procCols(nProcValues, Foam::Zero);
-    scalarField procVals(nProcValues, Foam::Zero);
-    nProcValues = 0;
-
-    forAll(interfaces, patchi)
-    {
-        if (interfaces.set(patchi))
-        {
-            // Processor-local values
-            const labelUList& faceCells = lduAddr.patchAddr(patchi);
-            const label len = faceCells.size();
-            const scalarField& bCoeffs = interfaceBouCoeffs_[patchi];
-
-            labelList nbrCells
-            (
-                interfaces[patchi].internalFieldTransfer
-                (
-                    Pstream::commsTypes::nonBlocking,
-                    globalCells
-                )
-            );
-
-            if (faceCells.size() != nbrCells.size())
-            {
-                FatalErrorInFunction
-                    << "Mismatch in interface sizes (AMI?)" << nl
-                    << "Have " << faceCells.size() << " != "
-                    << nbrCells.size() << nl
-                    << exit(FatalError);
-            }
-
-            SubList<label>(procRows, len, nProcValues) = faceCells;
-            SubList<label>(procCols, len, nProcValues) = nbrCells;
-            SubList<scalar>(procVals, len, nProcValues) = bCoeffs;
-            nProcValues += len;
-        }
-    }
-
-    procVals.negate();  // Change sign for entire field (see previous note)
-
-    csrMatrix.applyPermutation
-    (
-        matrix_,
-        diagIndexGlobal,
-        lowOffGlobal,
-        uppOffGlobal,
-        procRows,
-        procCols,
-        procVals
-    );
-
-    DebugInfo<< "Converted LDU matrix to CSR format" << nl;
-
-}
-
-
-//- construct the matrix for AmgX
-void Foam::AmgXSolver::applyMatrixPermutation
-(
-    csrMatrix& csrMatrix,
-    label& nRowsGlobal
-) const
-{
-    // UPtrList<const devicelduInterfaceField>& interfaces = this->interfaces_;
-
-    // Local degrees-of-freedom i.e. number of local rows
-    const label nLocalRows = matrix_.lduAddr().size();
-    nRowsGlobal = returnReduce(nLocalRows, sumOp<label>());
-
-    //- Number of internal faces (connectivity)
-    const label nIntFaces = matrix_.lduAddr().lowerAddr().size();
-
-    //- Connections to neighbouring processors
-    const label nReq = Pstream::nRequests();
-
-    label nProcValues = 0;
-
-    // Initialise transfer of global cells
-    forAll(interfaces_, patchi)
-    {
-        if (interfaces_.set(patchi)) nProcValues += interfaceBouCoeffs_[patchi].size();
-    }
-
-    if (Pstream::parRun())
-    {
-        Pstream::waitRequests(nReq);
-    }
-
-    scalarField procVals(nProcValues, Foam::Zero);
-    nProcValues = 0;
-
-    forAll(interfaces_, patchi)
-    {
-        if (interfaces_.set(patchi))
-        {
-            //- Processor-local values
-            const scalarField& bCoeffs = interfaceBouCoeffs_[patchi];
-            const label len = bCoeffs.size();
-
-            procVals.append(bCoeffs);
-
-            nProcValues += len;
-        }
-    }
-
-    procVals.negate();  // Change sign for entire field (see previous note)
-
-    csrMatrix.applyPermutation
-    (
-        matrix_,
-        procVals
-    );
-
-    DebugInfo<< "Converted LDU matrix values to CSR format" << nl;
-
-}
-
-
 Foam::solverPerformance Foam::AmgXSolver::solve
 (
     solveScalarField& psi,
@@ -299,16 +121,13 @@ Foam::solverPerformance Foam::AmgXSolver::solve
     }
     else
     {
-        // buildAndApplyMatrixPermutation(Amat, nGlobalCells);
-        /*if(!Amat.hasPermutation()) buildAndApplyMatrixPermutation(Amat, nGlobalCells);
-        else applyMatrixPermutation(Amat, nGlobalCells);*/
         Amat.applyPermutation(matrix_, interfaceBouCoeffs_, nGlobalCells);
     }
 
     label nnz = Amat.values().size();
 
     //- Print matrix converted to check
-    string fileName = "ownStart-cpu" + std::to_string(Pstream::myProcNo());
+    /*string fileName = "ownStart-cpu" + std::to_string(Pstream::myProcNo());
     std::ofstream outFile1(fileName); //, std::ios_base::app);
     outFile1 << "ownerStart:" << nl;
     for(int i=0; i< nCells+1; ++i) outFile1 << Amat.ownerStart().cdata()[i] << nl;
@@ -324,7 +143,7 @@ Foam::solverPerformance Foam::AmgXSolver::solve
     std::ofstream outFile3(fileName);
     outFile3 << nl << "values:" << nl;
     for(int i=0; i< nnz; ++i) outFile3 << Amat.values().cdata()[i] << nl;
-    outFile3.close();
+    outFile3.close();*/
 
     if(!ctx.initialized())
     {
