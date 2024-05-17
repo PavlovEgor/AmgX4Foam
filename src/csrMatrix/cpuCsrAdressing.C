@@ -35,41 +35,38 @@ License
 
 // * * * * * * * * * * * * * * * * CPU Kernels  * * * * * * * * * * * * * * //
 
+inline void Foam::csrAdressing::initializeSequence
+(
+    const int   len,
+          int * vect
+)
+{
+    // Initialize sequence [0, 1, ... len]
+    for(int i=0; i<len; ++i) vect[i] = i;
+}
+
 inline void Foam::csrAdressing::initializeAddressing
 (
     const int   nCells,
+    const int   nConsIntFaces,
     const int   nInternalFaces,
-    const int   totNnz,
     const int * const owner,
     const int * const neighbour,
           int * tmpPerm,
           int * rowIndTmp,
-          int * colIndTmp
+          int * colIndTmp,
+    const int   intFacesDispl // default = 0
 )
 {
-    // Initialize tmpPerm = [0, 1, ... totNnz-1]
-    for (int i = 0; i < totNnz; ++i)
-    {
-        tmpPerm[i] = i;
-    }
-
     // Initialize: rowIndecesTmp = [0, ... totNnz-1, (owner), (neighbour)]
-    //              colIndecesTmp = [0, ... totNnz-1, (neighbour), (owner)]
-    //              valuesTmp = [(diag), (upper), (lower)]
-
-    for(int i=0; i<nCells; ++i)
-    {
-        rowIndTmp[i] = i;
-        colIndTmp[i] = i;
-    }
-
+    //             colIndecesTmp = [0, ... totNnz-1, (neighbour), (owner)]
     for(int i=0; i<nInternalFaces; ++i)
     {
-        rowIndTmp[nCells + i] = owner[i];
-        colIndTmp[nCells + i] = neighbour[i];
+        rowIndTmp[nCells + intFacesDispl + i] = owner[i];
+        colIndTmp[nCells + intFacesDispl + i] = neighbour[i];
 
-        rowIndTmp[nCells + nInternalFaces + i] = neighbour[i];
-        colIndTmp[nCells + nInternalFaces + i] = owner[i];
+        rowIndTmp[nCells + nConsIntFaces + intFacesDispl + i] = neighbour[i];
+        colIndTmp[nCells + nConsIntFaces + intFacesDispl + i] = owner[i];
     }
 
     return;
@@ -79,34 +76,37 @@ inline void Foam::csrAdressing::initializeAddressing
 inline void Foam::csrAdressing::initializeAddressingExt
 (
     const int   nCells,
+    const int   nConsintFaces,
     const int   nInternalFaces,
     const int   nnzExt,
-    const int   totNnz,
     const int * const owner,
     const int * const neighbour,
     const int * const extRows,
     const int * const extCols,
           int * tmpPerm,
           int * rowIndTmp,
-          int * colIndTmp
+          int * colIndTmp,
+    const int   intFacesDispl, // default = 0
+    const int   extNnzDispl // default = 0
 )
 {
     initializeAddressing
     (
         nCells,
+        nConsintFaces,
         nInternalFaces,
-        totNnz,
         owner,
         neighbour,
         tmpPerm,
         rowIndTmp,
-        colIndTmp
+        colIndTmp,
+        intFacesDispl
     );
 
     for(int i=0; i<nnzExt; ++i)
     {
-        rowIndTmp[nCells + 2*nInternalFaces + i] = extRows[i];
-        colIndTmp[nCells + 2*nInternalFaces + i] = extCols[i];
+        rowIndTmp[nCells + 2*nConsintFaces + extNnzDispl + i] = extRows[i];
+        colIndTmp[nCells + 2*nConsintFaces + extNnzDispl + i] = extCols[i];
     }
 
     return;
@@ -142,26 +142,52 @@ inline void Foam::csrAdressing::computeSorting
 
 inline void Foam::csrAdressing::localToGlobalColIndices
 (
+    const int nConsRows,
     const int nRows,
     const int nIntFaces,
     const int diagIndexGlobal,
     const int lowOffGlobal,
     const int uppOffGlobal,
-    int *colIndicesGlobal
+    int *colIndicesGlobal,
+    const int rowDispl, //default = 0
+    const int intFacesDispl //default = 0
 )
 {
     for(int i=0; i<nRows; ++i)
     {
-        colIndicesGlobal[i] += diagIndexGlobal;
+        colIndicesGlobal[rowDispl + i] += diagIndexGlobal;
     }
 
     for(int i=0; i<nIntFaces; ++i)
     {
-        colIndicesGlobal[nRows + i] += uppOffGlobal;
-        colIndicesGlobal[nRows + nIntFaces + i] += lowOffGlobal;
+        colIndicesGlobal[nConsRows + intFacesDispl + i] += uppOffGlobal;
+        colIndicesGlobal[nConsRows + nIntFaces + intFacesDispl + i] += lowOffGlobal;
     }
 }
 
+inline void Foam::csrAdressing::localToConsRowIndex
+(
+    const int nConsRows,
+    const int nConsIntFaces,
+    const int nIntFaces,
+    const int nExtNz,
+    const int intFacesDipl,
+    const int extDispl,
+    const int offset,
+          int * rowIndices
+)
+{
+    for(int i=0; i<nIntFaces; ++i)
+    {
+        rowIndices[nConsRows + intFacesDipl + i] += offset;
+        rowIndices[nConsRows + nConsIntFaces + intFacesDipl + i] += offset;
+    }
+
+    for(int i=0; i<nExtNz; ++i)
+    {
+        rowIndices[nConsRows + 2 * nConsIntFaces + extDispl + i] += offset;
+    }
+}
 
 inline void Foam::csrAdressing::applyAddressingPermutation
 (

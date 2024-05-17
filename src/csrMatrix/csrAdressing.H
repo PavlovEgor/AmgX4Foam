@@ -53,6 +53,17 @@ SourceFiles
 namespace Foam
 {
 
+/* Enumeration for the status of matrix consolidation for the solver.*/
+enum class ConsolidationStatus
+{
+    uninitialised,
+    necessary,
+    notNecessary,
+    initialized,
+    consolidated
+};
+
+
 // Forward Declarations
 class csrAdressing;
 
@@ -66,7 +77,6 @@ class csrAdressing
     // Private Data
 
     // Private methods
-
 
 protected:
     //- Protected Data
@@ -83,32 +93,83 @@ protected:
         //- Permutation ldu2csr array
         labelList *ldu2csrPerm_;
 
+        //- Rows diplacement between consolidated processes
+        labelList * rowsConsDispPtr_;
+
+        //- Internal faces displcament between consolidated processes
+        labelList * intFacesConsDispPtr_;
+    
+        //- External values displcament between consolidated processes
+        labelList * extNzConsDispPtr_;
+
+        //- A flag indicating the type of consolidation applied
+        ConsolidationStatus consolidationStatus_ = ConsolidationStatus::uninitialised;
+
+        //- Index of the MPI communicator processes that talk to a GPU
+        label gpuWorld_;
+
+        //- Size of gpuWorld
+        label gpuWorldSize_;
+
+        //- Rank in gpuWorld
+        label myGpuWorldRank_;
+
+        //- Indication if the process talk directly to GPU
+        bool gpuProc_ = false;
+
     //- Protected functions
+        void initializeConsolidation
+        (
+            const label nLocalRows,
+            const label diagIndexGlobal,
+            const label lowOffGlobal,
+            const label uppOffGlobal,
+            const labelList& own,
+            const labelList& neigh,
+            const labelList& extRows,
+            const labelList& extCols,
+                  label& nConsRows,
+                  label& nConsIntFaces,
+                  label& nConsTotNz,
+                  labelList* consDiagOffGlob, 
+                  labelList* consLowOffGlob, 
+                  labelList* consUppOffGlob,
+                  List<labelList>& ownLst,
+                  List<labelList>& neighLst,
+                  List<labelList>& extRowsLst,
+                  List<labelList>& extColsLst
+        );
+
+        void initializeSequence(const int len, int * vectPtr);
+
         void initializeAddressing
         (
             const int   nCells,
+            const int   nConsIntFaces,
             const int   nInternalFaces,
-            const int   totNnz,
             const int * const owner,
             const int * const neighbour,
                   int * tmpPerm,
                   int * rowIndTmp,
-                  int * colIndTmp
+                  int * colIndTmp,
+            const int   intFacesDispl = 0
         );
 
         void initializeAddressingExt
         (
             const int   nCells,
+            const int   nConsIntFaces,
             const int   nInternalFaces,
             const int   nnzExt,
-            const int   totNnz,
             const int * const owner,
             const int * const neighbour,
             const int * const extRows,
             const int * const extCols,
                   int * tmpPerm,
                   int * rowIndTmp,
-                  int * colIndTmp
+                  int * colIndTmp,
+            const int   intFacesDispl = 0,
+            const int   extNnzDispl = 0
         );
 
         void computeSorting
@@ -122,12 +183,27 @@ protected:
 
         void localToGlobalColIndices
         (
+            const int   nConsRows,
             const int   nRows,
             const int   nIntFaces,
             const int   diagIndexGlobal,
             const int   lowOffGlobal,
             const int   uppOffGlobal,
-                  int * colIndicesGlobal
+                  int * colIndicesGlobal,
+            const int rowDispl = 0,
+            const int intFacesDispl = 0
+        );
+
+        void localToConsRowIndex
+        (
+            const int nConsRows,
+            const int nConsIntFaces,
+            const int nIntFaces,
+            const int nExtNz,
+            const int intFacesDipl,
+            const int extDispl,
+            const int offset,
+                  int * rowIndices
         );
 
         void applyAddressingPermutation
@@ -214,6 +290,11 @@ public:
             bool hasPermutation() const noexcept
             {
                 return (ldu2csrPerm_);
+            }
+
+            bool isConsolidated() const
+            {
+                return consolidationStatus_ == ConsolidationStatus::initialized;
             }
 
         //- Access to coefficients
