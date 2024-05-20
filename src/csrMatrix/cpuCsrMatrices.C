@@ -37,54 +37,67 @@ License
 
 inline void Foam::csrMatrix::initializeValue
 (
-    const int   nCells,
+    const int   nConsRows,
+    const int   nConsIntFaces,
+    const int   nRows,
     const int   nIntFaces,
     const double * const diag,
     const double * const upper,
     const double * const lower,
-          double * valuesTmp
+          double * valuesTmp,
+    const int   rowsDisp, // default = 0
+    const int   intFacesDisp // default = 0
 )
 {
-    for(int i=0; i<nCells; ++i)
+    for(int i=0; i<nRows; ++i)
     {
-        valuesTmp[i] = diag[i];
+        valuesTmp[rowsDisp + i] = diag[i];
     }
 
     for(int i=0; i<nIntFaces; ++i)
     {
-        valuesTmp[nCells + i] = upper[i];
-        valuesTmp[nCells + nIntFaces + i] = lower[i];
+        valuesTmp[nConsRows + intFacesDisp + i] = upper[i];
+        valuesTmp[nConsRows + nConsIntFaces + intFacesDisp + i] = lower[i];
     }
 }
 
 
 inline void Foam::csrMatrix::initializeValueExt
 (
-    const int   nCells,
-    const int   nIntFaces,
-    const int   nnzExt,
+    const int nConsRows,
+    const int nConsIntFaces,
+    const int nCells,
+    const int nIntFaces,
+    const int nnzExt,
     const double * const diag,
     const double * const upper,
     const double * const lower,
     const double * const extValue,
-          double * valuesTmp
+          double * valuesTmp,
+    const int rowsDisp, // default = 0
+    const int intFacesDisp, // default = 0
+    const int extValDisp // defaul = 0
 )
 {
     // Initialize valuesTmp = [(diag), (upper), (lower), (extValues)]
 
     initializeValue
     (
+        nConsRows,
+        nConsIntFaces,        
         nCells,
         nIntFaces,
         diag,
         upper,
         lower,
-        valuesTmp
+        valuesTmp,
+        rowsDisp,
+        intFacesDisp
     );
 
     for(int i=0; i<nnzExt; ++i)
     {
-        valuesTmp[nCells + 2*nIntFaces + i] = extValue[i];
+        valuesTmp[nConsRows + 2*nConsIntFaces + extValDisp + i] = extValue[i];
     }
 }
 

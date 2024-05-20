@@ -231,8 +231,6 @@ void Foam::csrAdressing::initializeConsolidation
     const labelList& neigh,
     const labelList& extRows,
     const labelList& extCols,
-          label& nConsRows,
-          label& nConsIntFaces,
           label& nConsTotNz,
           labelList* consDiagOffGlob, 
           labelList* consLowOffGlob, 
@@ -265,10 +263,10 @@ void Foam::csrAdressing::initializeConsolidation
         extNzConsDispPtr_->data()[i+1] += extNzConsDispPtr_->cdata()[i];
     }
 
-    nConsRows = rowsConsDispPtr_->last();
-    nConsIntFaces = intFacesConsDispPtr_->last();
-    label nConsExtNz = extNzConsDispPtr_->last();
-    nConsTotNz = nConsRows + 2*nConsIntFaces + nConsExtNz;
+    nConsRows_ = rowsConsDispPtr_->last();
+    nConsIntFaces_ = intFacesConsDispPtr_->last();
+    nConsExtNz_ = extNzConsDispPtr_->last();
+    nConsTotNz = nConsRows_ + 2*nConsIntFaces_ + nConsExtNz_;
 
     ownLst[myGpuWorldRank_] = own;
     Pstream::gatherList(ownLst, UPstream::msgType(), gpuWorld_);
@@ -452,8 +450,6 @@ void Foam::csrAdressing::computePermutation
     }
 
     label totNnz;
-    label nConsRows;
-    label nConsIntFaces;
     List<labelList> ownLst(gpuWorldSize_);
     List<labelList> neighLst(gpuWorldSize_);
     List<labelList> extColsLst(gpuWorldSize_);
@@ -465,20 +461,19 @@ void Foam::csrAdressing::computePermutation
     if(consolidationStatus_ == ConsolidationStatus::necessary)
     {
         initializeConsolidation(nCells, diagIndexGlobal, lowOffGlobal, uppOffGlobal,
-                                own, neigh, extRows, extCols,
-                                nConsRows, nConsIntFaces, totNnz,
+                                own, neigh, extRows, extCols, totNnz,
                                 consDiagOffGlob, consLowOffGlob, consUppOffGlob,
                                 ownLst, neighLst, extRowsLst, extColsLst);
     }
     else
     {
         totNnz = nCells + 2*nIntFaces + nnzExt;
-        nConsRows = nCells;
+        nConsRows_ = nCells;
     }
 
     if(gpuProc_)
     {
-        ownerStartPtr_ = new labelList(nConsRows+1, Foam::Zero);
+        ownerStartPtr_ = new labelList(nConsRows_+1, Foam::Zero);
         ldu2csrPerm_ = new labelList(totNnz);
         colIndicesPtr_ = new labelList(totNnz);
 
@@ -492,8 +487,8 @@ void Foam::csrAdressing::computePermutation
         //             colIndicesTmp = [0, ... nCells-1, (neighbour), (owner), (extcols)]
         initializeSequence(totNnz, tmpPerm.data());
 
-        initializeSequence(nConsRows, rowIndicesTmp.data());
-        initializeSequence(nConsRows, colIndicesTmp.data());
+        initializeSequence(nConsRows_, rowIndicesTmp.data());
+        initializeSequence(nConsRows_, colIndicesTmp.data());
 
         if(consolidationStatus_ == ConsolidationStatus::initialized)
         {
@@ -501,8 +496,8 @@ void Foam::csrAdressing::computePermutation
             {
                 initializeAddressingExt
                 (
-                    nConsRows,
-                    nConsIntFaces,
+                    nConsRows_,
+                    nConsIntFaces_,
                     intFacesConsDispPtr_->cdata()[i+1] - intFacesConsDispPtr_->cdata()[i],
                     extNzConsDispPtr_->cdata()[i+1] - extNzConsDispPtr_->cdata()[i],
                     ownLst[i].cdata(),
@@ -516,8 +511,8 @@ void Foam::csrAdressing::computePermutation
 
                 localToConsRowIndex
                 (
-                    nConsRows,
-                    nConsIntFaces,
+                    nConsRows_,
+                    nConsIntFaces_,
                     intFacesConsDispPtr_->cdata()[i+1] - intFacesConsDispPtr_->cdata()[i],
                     extNzConsDispPtr_->cdata()[i+1] - extNzConsDispPtr_->cdata()[i],
                     intFacesConsDispPtr_->cdata()[i],
@@ -563,7 +558,7 @@ void Foam::csrAdressing::computePermutation
             {
                 localToGlobalColIndices
                 (
-                    nConsRows,
+                    nConsRows_,
                     rowsConsDispPtr_->cdata()[i+1] - rowsConsDispPtr_->cdata()[i],
                     intFacesConsDispPtr_->cdata()[i+1] - intFacesConsDispPtr_->cdata()[i],
                     consDiagOffGlob->cdata()[i],
@@ -579,7 +574,7 @@ void Foam::csrAdressing::computePermutation
         {
             localToGlobalColIndices
             (
-                nConsRows,
+                nConsRows_,
                 nCells,
                 nIntFaces,
                 diagIndexGlobal,
@@ -592,7 +587,7 @@ void Foam::csrAdressing::computePermutation
         // Apply permutation vector to find colIndices + compute ownerStart
         applyAddressingPermutation
         (
-            nCells,
+            nConsRows_,
             totNnz,
             ldu2csrPerm_->cdata(),
             colIndicesTmp.cdata(),

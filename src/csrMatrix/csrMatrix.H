@@ -69,27 +69,48 @@ class csrMatrix
 
 
     // Private methods
+
+        void initializeValuesConsolidation
+        (
+            const scalarField& diag,
+            const scalarField& upper,
+            const scalarField& lower,
+            const scalarField& extVal,
+            List<scalarField>& diagLst,
+            List<scalarField>& upperLst,
+            List<scalarField>& lowerLst,
+            List<scalarField>& extValLst
+        );
            
         void initializeValue
         (
-            const int   nCells,
+            const int   nConsRows,
+            const int   nConsIntFaces,
+            const int   nRows,
             const int   nIntFaces,
             const double * const diag,
             const double * const upper,
             const double * const lower,
-                  double * valuesTmp                  
+                double * valuesTmp,
+            const int   rowsDisp = 0,
+            const int   intFacesDisp = 0              
         );
 
         void initializeValueExt
         (
-            const int      nCells,
-            const int      nIntFaces,
-            const int      nnzExt,
+            const int nConsRows,
+            const int nConsIntFaces,
+            const int nCells,
+            const int nIntFaces,
+            const int nnzExt,
             const double * const diag,
             const double * const upper,
             const double * const lower,
             const double * const extValue,
-                  double * valuesTmp
+                    double * valuesTmp,
+            const int rowsDisp = 0,
+            const int intFacesDisp = 0,
+            const int extValDisp = 0
         );
 
         void applyValuePermutation

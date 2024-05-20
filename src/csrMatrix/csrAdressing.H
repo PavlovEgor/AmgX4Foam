@@ -102,6 +102,18 @@ protected:
         //- External values displcament between consolidated processes
         labelList * extNzConsDispPtr_;
 
+        //- Total number of rows in the consolidated matrix
+        label nConsRows_;
+
+        //- Total number of internal faces in the consolidated matrix
+        label nConsIntFaces_;
+        
+        //- Total number of external values in the consolidated matrix
+        label nConsExtNz_;
+
+        //- Total number of non-zero values in the consolidated matrix
+        // label nConsTotNz_;
+
         //- A flag indicating the type of consolidation applied
         ConsolidationStatus consolidationStatus_ = ConsolidationStatus::uninitialised;
 
@@ -128,8 +140,6 @@ protected:
             const labelList& neigh,
             const labelList& extRows,
             const labelList& extCols,
-                  label& nConsRows,
-                  label& nConsIntFaces,
                   label& nConsTotNz,
                   labelList* consDiagOffGlob, 
                   labelList* consLowOffGlob, 

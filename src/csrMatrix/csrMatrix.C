@@ -100,6 +100,28 @@ const Foam::scalarField& Foam::csrMatrix::values() const
 
 // * * * * * * * * * * * * * * * * Operations * * * * * * * * * * * * * * * //
 
+void Foam::csrMatrix::initializeValuesConsolidation
+(
+    const scalarField& diag,
+    const scalarField& upper,
+    const scalarField& lower,
+    const scalarField& extVal,
+    List<scalarField>& diagLst,
+    List<scalarField>& upperLst,
+    List<scalarField>& lowerLst,
+    List<scalarField>& extValLst
+)
+{
+    diagLst[myGpuWorldRank_] = diag;
+    Pstream::gatherList(diagLst, UPstream::msgType(), gpuWorld_);
+    
+    upperLst[myGpuWorldRank_] = upper;
+    Pstream::gatherList(upperLst, UPstream::msgType(), gpuWorld_);
+
+    lowerLst[myGpuWorldRank_] = lower;
+    Pstream::gatherList(lowerLst, UPstream::msgType(), gpuWorld_);    
+}
+
 //- Apply permutation to LDU values (no permutation)
 void Foam::csrMatrix::applyPermutation(const lduMatrix& lduMatrix)
 {
@@ -127,6 +149,8 @@ void Foam::csrMatrix::applyPermutation(const lduMatrix& lduMatrix)
 
     initializeValue
     (
+        nCells,
+        nIntFaces,
         nCells,
         nIntFaces,
         diag.cdata(),
@@ -200,10 +224,27 @@ void Foam::csrMatrix:: applyPermutation
 
     label nIntFaces = upper.size();
     label nCells = diag.size();
-    label totNnz = nCells + 2*nIntFaces + nnzExt;
+    label totNnz;
 
     //- Compute global number of equations
     nGlobalCells = returnReduce(nCells, sumOp<label>());
+
+    List<scalarField> diagLst(gpuWorldSize_);
+    List<scalarField> lowerLst(gpuWorldSize_);
+    List<scalarField> upperLst(gpuWorldSize_);
+    List<scalarField> extValLst(gpuWorldSize_);
+
+    if(consolidationStatus_ == ConsolidationStatus::initialized)
+    {
+        initializeValuesConsolidation(diag, upper, lower, extVals,
+                                      diagLst, upperLst, lowerLst, extValLst);
+        
+        totNnz = nConsRows_ + 2*nConsIntFaces_ + nConsExtNz_;
+    }
+    else
+    {
+        totNnz = nCells + 2*nIntFaces + nnzExt;
+    }
 
     if(!valuesPtr_)
     {
@@ -213,18 +254,45 @@ void Foam::csrMatrix:: applyPermutation
     // Initialize valuesTmp = [(diag), (upper), (lower), (extValues)]
     scalarField valuesTmp(totNnz);
 
-    initializeValueExt
-    (
-        nCells,
-        nIntFaces,
-        nnzExt,
-        diag.cdata(),
-        upper.cdata(),
-        lower.cdata(),
-        extVals.cdata(),
-        valuesTmp.data()
-    );
-
+    if(consolidationStatus_ == ConsolidationStatus::initialized)
+    {
+        for(label i=0; i<gpuWorldSize_; ++i)
+        {
+            initializeValueExt
+            (
+                nConsRows_,
+                nConsIntFaces_,
+                rowsConsDispPtr_->cdata()[i+1] - rowsConsDispPtr_->cdata()[i],
+                intFacesConsDispPtr_->cdata()[i+1] - intFacesConsDispPtr_->cdata()[i],
+                extNzConsDispPtr_->cdata()[i+1] - extNzConsDispPtr_->cdata()[i],
+                diag.cdata(),
+                upper.cdata(),
+                lower.cdata(),
+                extVals.cdata(),
+                valuesTmp.data(),
+                rowsConsDispPtr_->cdata()[i],
+                intFacesConsDispPtr_->cdata()[i],
+                extNzConsDispPtr_->cdata()[i]
+            );
+        }
+    }
+    else
+    {
+        initializeValueExt
+        (
+            nCells,
+            nIntFaces,
+            nCells,
+            nIntFaces,
+            nnzExt,
+            diag.cdata(),
+            upper.cdata(),
+            lower.cdata(),
+            extVals.cdata(),
+            valuesTmp.data()
+        );
+    }
+    
     // Apply permutation
     applyValuePermutation
     (
