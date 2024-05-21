@@ -46,6 +46,7 @@ SourceFiles
 
 // AmgX
 #include <amgx_c.h>
+#include <mpi.h>
 
 #include "word.H"
 #include "scalar.H"
@@ -113,6 +114,8 @@ class AmgXWrapper
             const word &dataLocation,
             const string &configStr
         );
+
+        void initialiseMatrixComms(csrAdressing* matrix);
 
 
         /** \brief Finalize this instance.
@@ -212,20 +215,53 @@ class AmgXWrapper
         /** \brief A flag indicating if this instance has been initialized. */
         bool                    isInitialised = false;
 
-        /** \brief Number of local GPU devices used by AmgX.*/
+        /** \brief the global MPI communicator processes. */
+        MPI_Comm                   globalWorld_;
+
+        /** \brief the index of the global MPI communicator processes. */
+        label                   globalWorldIdx_;
+
+        /** \brief Size of \ref AmgXWrapper::globalWorld "globalWorld". */
+        label                   globalWorldSize_;
+
+        /** \brief Rank in \ref AmgXWrapper::globalWorld "globalWorld". */
+        label                   myGlobalWorldRank_;
+
+        /** \brief the index of the local node MPI communicator processes. */
+        MPI_Comm                   localWorld_;
+
+        /** \brief Size of \ref AmgXWrapper::globalWorld "globalWorld". */
+        label                   localWorldSize_;
+
+        /** \brief Rank in \ref AmgXWrapper::globalWorld "globalWorld". */
+        label                   myLocalWorldRank_;
+
+        /** \brief the index of the MPI communicator processes that talk to a GPUs. */
+        MPI_Comm                   gpuWorld_;
+
+        /** \brief Size of \ref AmgXWrapper::gpuWorld "gpuWorld". */
+        label                   gpuWorldSize_;
+
+        /** \brief Rank in \ref AmgXWrapper::gpuWorld "gpuWorld". */
+        label                   myGpuWorldRank_;
+
+        /** \brief the index of the MPI communicator af all the processes that tolk with GPU. */
+        MPI_Comm                   globalGpuWorld_;
+
+        /** \brief Size of \ref AmgXWrapper::myGpuWorldRank_ "myGpuWorldRank_". */
+        label                   globalGpuWorldSize_;
+
+        /** \brief Rank in \ref AmgXWrapper::myGpuWorldRank_ "myGpuWorldRank_". */
+        label                   myGlobalGpuWorldRank_;
+
+        /** \brief Number of GPU devices in the node.*/
         label                   nDevs_;
 
         /** \brief The ID of corresponding GPU device used by this MPI process. */
         label                   devID_;
 
-        /** \brief the index of the MPI communicator processes that can talk to GPUs. */
-        int                      gpuWorld_;
-
-        /** \brief Size of \ref AmgXWrapper::gpuWorld "gpuWorld". */
-        int                     gpuWorldSize_;
-
-        /** \brief Rank in \ref AmgXWrapper::gpuWorld "gpuWorld". */
-        int                     myGpuWorldRank_;
+        /** \brief Flag that indicates if the process is assigned to a GPU. */
+        bool                    gpuProc_;
 
         /** \brief A parameter used by AmgX. */
         label                   ring;
@@ -258,6 +294,12 @@ class AmgXWrapper
          * as a static member to keep only one instance.
          */
         static AMGX_resources_handle   rsrc;
+
+        /** \brief AmgX solver object. */
+        scalar*               pCons_ = nullptr;
+
+        /** \brief AmgX solver object. */
+        scalar*      rhsCons_ = nullptr;
 
         /** \brief Set AmgX solver mode based on the user-provided string.
          *

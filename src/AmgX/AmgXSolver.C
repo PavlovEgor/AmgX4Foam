@@ -117,10 +117,11 @@ Foam::solverPerformance Foam::AmgXSolver::solve
     if(!Pstream::parRun())
     {
         nGlobalCells = nCells;
-        Amat.applyPermutation(this->matrix_);
+        Amat.applyPermutation(matrix_);
     }
     else
     {
+        amgx.initialiseMatrixComms(&Amat);
         Amat.applyPermutation(matrix_, interfaceBouCoeffs_, nGlobalCells);
     }
 

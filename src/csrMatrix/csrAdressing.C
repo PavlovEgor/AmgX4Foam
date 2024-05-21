@@ -205,6 +205,30 @@ void Foam::csrAdressing::finalizeAdressing()
 
 // * * * * * * * * * * * * * * * * Operations * * * * * * * * * * * * * * * //
 
+//- Initialize matrix comunications for consolidation
+void Foam::csrAdressing::initializeComms(label commId, bool gpuProc)
+{
+    gpuWorld_ = commId;
+
+    gpuProc_ = gpuProc;
+
+    Pout << "---> this process talks with a GPU: " << gpuProc_ << nl;
+
+    gpuWorldSize_ = Pstream::nProcs(gpuWorld_);
+    myGpuWorldRank_ = Pstream::myProcNo(gpuWorld_);
+
+    if (gpuWorldSize_ > 1)
+    {
+        consolidationStatus_ = ConsolidationStatus::necessary;
+        Info << "the consolidation is necessary" << nl;
+    }
+    else
+    {
+        consolidationStatus_ = ConsolidationStatus::notNecessary;
+        Info << "the consolidation is not necessary" << nl;
+    }
+}
+
 //- Deallocate useless addressing pointer
 void Foam::csrAdressing::clearAddressing()
 {

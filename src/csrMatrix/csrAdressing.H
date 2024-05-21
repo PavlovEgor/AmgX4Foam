@@ -302,9 +302,21 @@ public:
                 return (ldu2csrPerm_);
             }
 
+            //- true if the matrix is consolidated
             bool isConsolidated() const
             {
                 return consolidationStatus_ == ConsolidationStatus::initialized;
+            }
+
+            //- Retrun rows displacement in consolidated matrix
+            label nConsRows() const
+            {
+                return nConsRows_;
+            }
+
+            const labelList& rowsConsDisp() const
+            {
+                return *rowsConsDispPtr_;
             }
 
         //- Access to coefficients
@@ -318,6 +330,9 @@ public:
             {
                 nBlocks_ = n;
             }
+
+            //- Initialize matrix comunications for consolidation
+            void initializeComms(label commId, bool gpuProc);
 
             //- Deallocate useless addressing pointer
             void clearAddressing();
