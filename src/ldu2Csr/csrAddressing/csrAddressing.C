@@ -26,7 +26,7 @@ License
 
 \*---------------------------------------------------------------------------*/
 
-#include "csrAdressing.H"
+#include "csrAddressing.H"
 
 #include "globalIndex.H"
 
@@ -35,14 +35,14 @@ License
 
 // * * * * * * * * * * * * * * * Constructors * * * * * * * * * * * * * * * //
 
-Foam::csrAdressing::csrAdressing()
+Foam::csrAddressing::csrAddressing()
 :
     ownerStartPtr_(nullptr),
     colIndicesPtr_(nullptr),
     ldu2csrPerm_(nullptr)
 {}
 
-Foam::csrAdressing::csrAdressing(const csrAdressing& A)
+Foam::csrAddressing::csrAddressing(const csrAddressing& A)
 :
     ownerStartPtr_(nullptr),
     colIndicesPtr_(nullptr),
@@ -65,7 +65,7 @@ Foam::csrAdressing::csrAdressing(const csrAdressing& A)
 }
 
 
-Foam::csrAdressing::csrAdressing(csrAdressing& A, bool reuse)
+Foam::csrAddressing::csrAddressing(csrAddressing& A, bool reuse)
 :
     ownerStartPtr_(nullptr),
     colIndicesPtr_(nullptr),
@@ -112,7 +112,7 @@ Foam::csrAdressing::csrAdressing(csrAdressing& A, bool reuse)
 
 // * * * * * * * * * * * *  Public Member Functions * * * * * * * * * * * *  //
 
-void Foam::csrAdressing::finalizeAdressing()
+void Foam::csrAddressing::finalizeAdressing()
 {
     if (ownerStartPtr_)
     {
@@ -134,7 +134,7 @@ void Foam::csrAdressing::finalizeAdressing()
 // * * * * * * * * * * * * * * * * Operations * * * * * * * * * * * * * * * //
 
 //- Deallocate useless addressing pointer
-void Foam::csrAdressing::clearAddressing()
+void Foam::csrAddressing::clearAddressing()
 {
     if (ownerStartPtr_)
     {
@@ -149,7 +149,7 @@ void Foam::csrAdressing::clearAddressing()
 
 
 //- Find permutation array and new addressing vectors (no interface)
-void Foam::csrAdressing::computePermutation(const lduAddressing * addr)
+void Foam::csrAddressing::computePermutation(const lduAddressing * addr)
 {
     const labelList& own = addr->lowerAddr();
     const labelList& neigh = addr->upperAddr();
@@ -207,7 +207,7 @@ void Foam::csrAdressing::computePermutation(const lduAddressing * addr)
 
 
 //- Find permutation array and new addressing vectors
-void Foam::csrAdressing::computePermutation
+void Foam::csrAddressing::computePermutation
 (
     const lduAddressing& addr,
     const lduInterfacePtrsList& interfaces,

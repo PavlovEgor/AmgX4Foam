@@ -1,8 +1,8 @@
 AmgX/AmgXLinearSolverContext.C
 AmgX/AmgXSolver.C
 AmgX/AmgXWrapper.C
-csrMatrix/cpuCsrAdressing.C
-csrMatrix/cpuCsrMatrices.C
+ldu2Csr/csrAddressing/cpuCsrAddressing.C
+ldu2Csr/csrMatrix/cpuCsrMatrices.C
 utility/linearSolverContextTable.C
 
 LIB = $(FOAM_USER_LIBBIN)/libEscapeFromFoam

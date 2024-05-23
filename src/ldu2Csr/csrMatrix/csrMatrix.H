@@ -43,7 +43,7 @@ SourceFiles
 #include "Enum.H"
 #include "scalar.H"
 #include "lduMatrix.H"
-#include "csrAdressing.H"
+#include "csrAddressing.H"
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
@@ -60,7 +60,7 @@ class csrMatrix;
 
 class csrMatrix
 :
-    public csrAdressing
+    public csrAddressing
 {
     // Private Data
 

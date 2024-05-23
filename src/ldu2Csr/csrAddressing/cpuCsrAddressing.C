@@ -29,13 +29,13 @@ License
 
 // ************************************************************************* //
 
-#include "csrAdressing.C"
+#include "csrAddressing.C"
 #include <cmath>
 #include <bits/stdc++.h>
 
 // * * * * * * * * * * * * * * * * CPU Kernels  * * * * * * * * * * * * * * //
 
-inline void Foam::csrAdressing::initializeAddressing
+inline void Foam::csrAddressing::initializeAddressing
 (
     const int   nCells,
     const int   nInternalFaces,
@@ -76,7 +76,7 @@ inline void Foam::csrAdressing::initializeAddressing
 }
 
 
-inline void Foam::csrAdressing::initializeAddressingExt
+inline void Foam::csrAddressing::initializeAddressingExt
 (
     const int   nCells,
     const int   nInternalFaces,
@@ -112,7 +112,7 @@ inline void Foam::csrAdressing::initializeAddressingExt
     return;
 }
 
-inline void Foam::csrAdressing::computeSorting
+inline void Foam::csrAddressing::computeSorting
 (
     const int   totNnz,
     const int * const tmpPerm,
@@ -140,7 +140,7 @@ inline void Foam::csrAdressing::computeSorting
 }
 
 
-inline void Foam::csrAdressing::localToGlobalColIndices
+inline void Foam::csrAddressing::localToGlobalColIndices
 (
     const int nRows,
     const int nIntFaces,
@@ -163,7 +163,7 @@ inline void Foam::csrAdressing::localToGlobalColIndices
 }
 
 
-inline void Foam::csrAdressing::applyAddressingPermutation
+inline void Foam::csrAddressing::applyAddressingPermutation
 (
     const int   nCells, //NOTE: it is not used but is need for the cuda kernel
     const int   totNnz,

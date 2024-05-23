@@ -26,23 +26,23 @@ License
     along with OpenFOAM.  If not, see <http://www.gnu.org/licenses/>.
 
 Class
-    Foam::csrAdressing
+    Foam::csrAddressing
 
 Description
-    csrAdressing is a base class for csr matrices and contains methods to 
+    csrAddressing is a base class for csr matrices and contains methods to
     compute permutation from other data structures to csr.
     In CSR format the coefficients are stored in a single array.
     Addressing arrays must be supplied for the number of values per row and
     for teh values column index.
 
 SourceFiles
-    csrAdressing.H
-    csrAdressing.C
+    csrAddressing.H
+    csrAddressing.C
 
 \*---------------------------------------------------------------------------*/
 
-#ifndef Foam_csrAdressing_H
-#define Foam_csrAdressing_H
+#ifndef Foam_csrAddressing_H
+#define Foam_csrAddressing_H
 
 #include "Enum.H"
 #include "scalar.H"
@@ -54,14 +54,14 @@ namespace Foam
 {
 
 // Forward Declarations
-class csrAdressing;
+class csrAddressing;
 
 
 /*---------------------------------------------------------------------------*\
-                           Class csrAdressing Declaration
+                           Class csrAddressing Declaration
 \*---------------------------------------------------------------------------*/
 
-class csrAdressing
+class csrAddressing
 {
     // Private Data
 
@@ -159,19 +159,19 @@ public:
     //- Static Data
 
         // Declare name of the class and its debug switch
-        ClassName("csrAdressing");
+        ClassName("csrAddressing");
 
     //- Constructors
 
         //- Construct default.
         //  The coefficients are initialized empty.
-        csrAdressing();
+        csrAddressing();
 
         //- Construct as copy
-        csrAdressing(const csrAdressing& A);
+        csrAddressing(const csrAddressing& A);
 
         //- Construct as copy or re-use as specified.
-        csrAdressing(csrAdressing& A, bool reuse);
+        csrAddressing(csrAddressing& A, bool reuse);
 
         //- Construct given an LDU addressed mesh and an Istream
         //- from which the coefficients are read
@@ -179,7 +179,7 @@ public:
 
 
     //- Destructor
-        ~csrAdressing() = default;
+        ~csrAddressing() = default;
 
 
     //- Member Functions

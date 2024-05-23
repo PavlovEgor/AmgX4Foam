@@ -36,13 +36,13 @@ License
 
 Foam::csrMatrix::csrMatrix()
 :
-    csrAdressing(),
+    csrAddressing(),
     valuesPtr_(nullptr)
 {}
 
 Foam::csrMatrix::csrMatrix(const csrMatrix& A)
 :
-    csrAdressing(A),
+    csrAddressing(A),
     valuesPtr_(nullptr)
 {
     if (A.valuesPtr_)
@@ -54,7 +54,7 @@ Foam::csrMatrix::csrMatrix(const csrMatrix& A)
 
 Foam::csrMatrix::csrMatrix(csrMatrix& A, bool reuse)
 :
-    csrAdressing(A, reuse),
+    csrAddressing(A, reuse),
     valuesPtr_(nullptr)
 {
     if (reuse)
