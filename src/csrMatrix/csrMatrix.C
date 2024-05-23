@@ -119,7 +119,10 @@ void Foam::csrMatrix::initializeValuesConsolidation
     Pstream::gatherList(upperLst, UPstream::msgType(), gpuWorld_);
 
     lowerLst[myGpuWorldRank_] = lower;
-    Pstream::gatherList(lowerLst, UPstream::msgType(), gpuWorld_);    
+    Pstream::gatherList(lowerLst, UPstream::msgType(), gpuWorld_);
+
+    extValLst[myGpuWorldRank_] = extVal;
+    Pstream::gatherList(extValLst, UPstream::msgType(), gpuWorld_);
 }
 
 //- Apply permutation to LDU values (no permutation)
@@ -265,10 +268,10 @@ void Foam::csrMatrix:: applyPermutation
                 rowsConsDispPtr_->cdata()[i+1] - rowsConsDispPtr_->cdata()[i],
                 intFacesConsDispPtr_->cdata()[i+1] - intFacesConsDispPtr_->cdata()[i],
                 extNzConsDispPtr_->cdata()[i+1] - extNzConsDispPtr_->cdata()[i],
-                diag.cdata(),
-                upper.cdata(),
-                lower.cdata(),
-                extVals.cdata(),
+                diagLst[i].cdata(),
+                upperLst[i].cdata(),
+                lowerLst[i].cdata(),
+                extValLst[i].cdata(),
                 valuesTmp.data(),
                 rowsConsDispPtr_->cdata()[i],
                 intFacesConsDispPtr_->cdata()[i],

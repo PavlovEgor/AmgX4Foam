@@ -42,6 +42,7 @@ inline void Foam::csrAdressing::initializeAddressing
     const int   nConsIntFaces,
     const int   nRows,
     const int   nInternalFaces,
+    const int   totNnz,
     const int * const owner,
     const int * const neighbour,
           int * tmpPerm,
@@ -51,14 +52,16 @@ inline void Foam::csrAdressing::initializeAddressing
     const int   intFacesDispl // default = 0
 )
 {
-    // Initialize: rowIndecesTmp = [0, ... totNnz-1, (owner), (neighbour)]
-    //             colIndecesTmp = [0, ... totNnz-1, (neighbour), (owner)]
-    for(int i=0; i<nRows; ++i)
-    {
-        colIndTmp[rowDispl + i] = i;
-    }
+    // Initialize tmpPerm = [0, 1, ... totNnz-1]
+    for (int i = 0; i < totNnz; ++i) tmpPerm[i] = i;
+
+    // Initialize: rowIndecesTmp = [0, ... nConsRows-1, (owner), (neighbour)]
+    //             colIndecesTmp = [(0, ... nRows0-1), ... (0, ... nRowsN-1), (neighbour), (owner)]
+    for(int i=0; i<nRows; ++i) colIndTmp[rowDispl + i] = i;
 
     for(int i=0; i<nConsRows; ++i) rowIndTmp[i] = i;
+
+    
 
     for(int i=0; i<nInternalFaces; ++i)
     {
@@ -80,6 +83,7 @@ inline void Foam::csrAdressing::initializeAddressingExt
     const int   nRows,
     const int   nInternalFaces,
     const int   nnzExt,
+    const int   totNnz,
     const int * const owner,
     const int * const neighbour,
     const int * const extRows,
@@ -98,6 +102,7 @@ inline void Foam::csrAdressing::initializeAddressingExt
         nConsintFaces,
         nRows,
         nInternalFaces,
+        totNnz,
         owner,
         neighbour,
         tmpPerm,

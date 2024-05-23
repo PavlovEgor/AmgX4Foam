@@ -353,18 +353,14 @@ void Foam::csrAdressing::computePermutation(const lduAddressing * addr)
 
     // Initialize: tmpPerm = [0, 1, ... totNnz-1]
     //             rowIndicesTmp = [0, ... nCells-1, (owner), (neighbour)]
-    //             colIndicesTmp = [0, ... nCells-1, (neighbour), (owner)]
-    initializeSequence(totNnz, tmpPerm.data());
-
-    initializeSequence(nCells, rowIndicesTmp.data());
-    initializeSequence(nCells, colIndicesTmp.data());
-    
+    //             colIndicesTmp = [0, ... nCells-1, (neighbour), (owner)]   
     initializeAddressing
     (
         nCells,
         nIntFaces,
         nCells,
         nIntFaces,
+        totNnz,
         own.cdata(),
         neigh.cdata(),
         tmpPerm.data(),
@@ -527,11 +523,6 @@ void Foam::csrAdressing::computePermutation
         // Initialize: tmpPerm = [0, 1, ... totNnz-1]
         //             rowIndicesTmp = [0, ... nCells-1, (owner), (neighbour), (extrows)]
         //             colIndicesTmp = [0, ... nCells-1, (neighbour), (owner), (extcols)]
-        initializeSequence(totNnz, tmpPerm.data());
-
-        initializeSequence(nConsRows_, rowIndicesTmp.data());
-        initializeSequence(nConsRows_, colIndicesTmp.data());
-
         if(consolidationStatus_ == ConsolidationStatus::initialized)
         {
             for(label i=0; i<gpuWorldSize_; ++i)
@@ -543,6 +534,7 @@ void Foam::csrAdressing::computePermutation
                     rowsConsDispPtr_->cdata()[i+1] - rowsConsDispPtr_->cdata()[i],
                     intFacesConsDispPtr_->cdata()[i+1] - intFacesConsDispPtr_->cdata()[i],
                     extNzConsDispPtr_->cdata()[i+1] - extNzConsDispPtr_->cdata()[i],
+                    totNnz,
                     ownLst[i].cdata(),
                     neighLst[i].cdata(),
                     extRowsLst[i].cdata(),
@@ -566,7 +558,7 @@ void Foam::csrAdressing::computePermutation
                     rowsConsDispPtr_->cdata()[i],
                     rowIndicesTmp.data()
                 );        
-            }            
+            }
         }
         else
         {
@@ -577,6 +569,7 @@ void Foam::csrAdressing::computePermutation
                 nCells,
                 nIntFaces,
                 nnzExt,
+                totNnz,
                 own.cdata(),
                 neigh.cdata(),
                 extRows.cdata(),
