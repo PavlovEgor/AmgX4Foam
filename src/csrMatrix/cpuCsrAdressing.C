@@ -35,38 +35,38 @@ License
 
 // * * * * * * * * * * * * * * * * CPU Kernels  * * * * * * * * * * * * * * //
 
-inline void Foam::csrAdressing::initializeSequence
-(
-    const int   len,
-          int * vect
-)
-{
-    // Initialize sequence [0, 1, ... len]
-    for(int i=0; i<len; ++i) vect[i] = i;
-}
 
 inline void Foam::csrAdressing::initializeAddressing
 (
-    const int   nCells,
+    const int   nConsRows,
     const int   nConsIntFaces,
+    const int   nRows,
     const int   nInternalFaces,
     const int * const owner,
     const int * const neighbour,
           int * tmpPerm,
           int * rowIndTmp,
           int * colIndTmp,
+    const int   rowDispl, //default =0
     const int   intFacesDispl // default = 0
 )
 {
     // Initialize: rowIndecesTmp = [0, ... totNnz-1, (owner), (neighbour)]
     //             colIndecesTmp = [0, ... totNnz-1, (neighbour), (owner)]
+    for(int i=0; i<nRows; ++i)
+    {
+        colIndTmp[rowDispl + i] = i;
+    }
+
+    for(int i=0; i<nConsRows; ++i) rowIndTmp[i] = i;
+
     for(int i=0; i<nInternalFaces; ++i)
     {
-        rowIndTmp[nCells + intFacesDispl + i] = owner[i];
-        colIndTmp[nCells + intFacesDispl + i] = neighbour[i];
+        rowIndTmp[nConsRows + intFacesDispl + i] = owner[i];
+        colIndTmp[nConsRows + intFacesDispl + i] = neighbour[i];
 
-        rowIndTmp[nCells + nConsIntFaces + intFacesDispl + i] = neighbour[i];
-        colIndTmp[nCells + nConsIntFaces + intFacesDispl + i] = owner[i];
+        rowIndTmp[nConsRows + nConsIntFaces + intFacesDispl + i] = neighbour[i];
+        colIndTmp[nConsRows + nConsIntFaces + intFacesDispl + i] = owner[i];
     }
 
     return;
@@ -75,8 +75,9 @@ inline void Foam::csrAdressing::initializeAddressing
 
 inline void Foam::csrAdressing::initializeAddressingExt
 (
-    const int   nCells,
+    const int   nConsRows,
     const int   nConsintFaces,
+    const int   nRows,
     const int   nInternalFaces,
     const int   nnzExt,
     const int * const owner,
@@ -86,27 +87,30 @@ inline void Foam::csrAdressing::initializeAddressingExt
           int * tmpPerm,
           int * rowIndTmp,
           int * colIndTmp,
+    const int   rowsDispl, // default = 0
     const int   intFacesDispl, // default = 0
     const int   extNnzDispl // default = 0
 )
 {
     initializeAddressing
     (
-        nCells,
+        nConsRows,
         nConsintFaces,
+        nRows,
         nInternalFaces,
         owner,
         neighbour,
         tmpPerm,
         rowIndTmp,
         colIndTmp,
+        rowsDispl,
         intFacesDispl
     );
 
     for(int i=0; i<nnzExt; ++i)
     {
-        rowIndTmp[nCells + 2*nConsintFaces + extNnzDispl + i] = extRows[i];
-        colIndTmp[nCells + 2*nConsintFaces + extNnzDispl + i] = extCols[i];
+        rowIndTmp[nConsRows + 2*nConsintFaces + extNnzDispl + i] = extRows[i];
+        colIndTmp[nConsRows + 2*nConsintFaces + extNnzDispl + i] = extCols[i];
     }
 
     return;
@@ -143,6 +147,7 @@ inline void Foam::csrAdressing::computeSorting
 inline void Foam::csrAdressing::localToGlobalColIndices
 (
     const int nConsRows,
+    const int nConsIntFaces,
     const int nRows,
     const int nIntFaces,
     const int diagIndexGlobal,
@@ -152,7 +157,7 @@ inline void Foam::csrAdressing::localToGlobalColIndices
     const int rowDispl, //default = 0
     const int intFacesDispl //default = 0
 )
-{
+{   
     for(int i=0; i<nRows; ++i)
     {
         colIndicesGlobal[rowDispl + i] += diagIndexGlobal;
@@ -161,7 +166,7 @@ inline void Foam::csrAdressing::localToGlobalColIndices
     for(int i=0; i<nIntFaces; ++i)
     {
         colIndicesGlobal[nConsRows + intFacesDispl + i] += uppOffGlobal;
-        colIndicesGlobal[nConsRows + nIntFaces + intFacesDispl + i] += lowOffGlobal;
+        colIndicesGlobal[nConsRows + nConsIntFaces + intFacesDispl + i] += lowOffGlobal;
     }
 }
 
@@ -205,6 +210,7 @@ inline void Foam::csrAdressing::applyAddressingPermutation
     for(int i=0; i<totNnz; ++i)
     {
         colInd[i] = colIndTmp[ldu2csr[i]];
+
         if(curRow < rowInd[i])
         {
             ownStart[rowInd[i]] = i;

@@ -150,25 +150,26 @@ protected:
                   List<labelList>& extColsLst
         );
 
-        void initializeSequence(const int len, int * vectPtr);
-
         void initializeAddressing
         (
-            const int   nCells,
+            const int   nConsRows,
             const int   nConsIntFaces,
+            const int   nRows,
             const int   nInternalFaces,
             const int * const owner,
             const int * const neighbour,
                   int * tmpPerm,
                   int * rowIndTmp,
                   int * colIndTmp,
+            const int   rowsDispl = 0,
             const int   intFacesDispl = 0
         );
 
         void initializeAddressingExt
         (
-            const int   nCells,
+            const int   nConsRows,
             const int   nConsIntFaces,
+            const int   nRows,
             const int   nInternalFaces,
             const int   nnzExt,
             const int * const owner,
@@ -178,6 +179,7 @@ protected:
                   int * tmpPerm,
                   int * rowIndTmp,
                   int * colIndTmp,
+            const int   rowsDispl =0,
             const int   intFacesDispl = 0,
             const int   extNnzDispl = 0
         );
@@ -194,6 +196,7 @@ protected:
         void localToGlobalColIndices
         (
             const int   nConsRows,
+            const int   nConsIntFaces,
             const int   nRows,
             const int   nIntFaces,
             const int   diagIndexGlobal,
