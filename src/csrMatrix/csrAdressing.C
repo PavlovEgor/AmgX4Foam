@@ -384,6 +384,8 @@ void Foam::csrAdressing::computePermutation(const lduAddressing * addr)
         colIndicesPtr_->data(),
         ownerStartPtr_->data()
     );
+
+    hasPermutation_ = true;
 }
 
 
@@ -503,8 +505,6 @@ void Foam::csrAdressing::computePermutation
         totNnz = nCells + 2*nIntFaces + nnzExt;
         nConsRows_ = nCells;
     }
-
-    fprintf(stderr, "[%ld] -> consolodation initilized\n", myGpuWorldRank_);
 
     if(gpuProc_)
     {
@@ -638,7 +638,7 @@ void Foam::csrAdressing::computePermutation
     
     UPstream::barrier(gpuWorld_);
 
-    fprintf(stderr, "[%ld] -> permutation completed\n", myGpuWorldRank_);
+    hasPermutation_ = true;
     
     if(consDiagOffGlob) delete consDiagOffGlob;
     if(consLowOffGlob) delete consLowOffGlob;

@@ -123,6 +123,8 @@ void Foam::csrMatrix::initializeValuesConsolidation
 
     extValLst[myGpuWorldRank_] = extVal;
     Pstream::gatherList(extValLst, UPstream::msgType(), gpuWorld_);
+
+    Pstream::barrier(gpuWorld_);
 }
 
 //- Apply permutation to LDU values (no permutation)
@@ -185,7 +187,7 @@ void Foam::csrMatrix:: applyPermutation
     const lduInterfacePtrsList& interfaces(lduMatrix.mesh().interfaces());
 
     // Verify that the permutation has already been computed
-    if(!ldu2csrPerm_)
+    if(!hasPermutation())
     {
         computePermutation
         (

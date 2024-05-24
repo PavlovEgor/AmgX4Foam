@@ -93,6 +93,9 @@ protected:
         //- Permutation ldu2csr array
         labelList *ldu2csrPerm_;
 
+        //- Flag for computed permutation
+        bool       hasPermutation_ = false;
+
         //- Rows diplacement between consolidated processes
         labelList * rowsConsDispPtr_;
 
@@ -304,7 +307,7 @@ public:
             //- Return true if the permutation has been computed
             bool hasPermutation() const noexcept
             {
-                return (ldu2csrPerm_);
+                return hasPermutation_;
             }
 
             //- true if the matrix is consolidated

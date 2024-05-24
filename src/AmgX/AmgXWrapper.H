@@ -262,7 +262,7 @@ class AmgXWrapper
         label                   devID_;
 
         /** \brief Flag that indicates if the process is assigned to a GPU. */
-        bool                    gpuProc_;
+        bool                    gpuProc_ = false;
 
         /** \brief A parameter used by AmgX. */
         label                   ring;

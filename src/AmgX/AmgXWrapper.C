@@ -31,22 +31,14 @@ License
 
 #include "PstreamGlobals.H"
 
-#include <iostream>
-#include <fstream>
+// #include <iostream>
+// #include <fstream>
 
 // initialize AmgXWrapper::count to 0
 int Foam::AmgXWrapper::count = 0;
 
 // initialize AmgXWrapper::rsrc to nullptr;
 AMGX_resources_handle Foam::AmgXWrapper::rsrc = nullptr;
-
-void checkCudaError(cudaError_t err, const char* msg) {
-    if (err != cudaSuccess) {
-        std::cerr << msg << " (error code " << err << "): " << cudaGetErrorString(err) << std::endl;
-        exit(EXIT_FAILURE);
-    }
-}
-
 
 // * * * * * * * * * * * * * * * * Constructors  * * * * * * * * * * * * * * //
 
@@ -79,6 +71,13 @@ void checkAmgXerror(AMGX_RC code, Foam::word function)
     if(code != AMGX_RC_OK){
         AMGX_get_error_string(code, buff, 256);
         Foam::Info << function << "returned: " << buff << Foam::nl;
+    }
+}
+
+void checkCudaError(cudaError_t err, const char* msg) {
+    if (err != cudaSuccess) {
+        std::cerr << msg << " (error code " << err << "): " << cudaGetErrorString(err) << std::endl;
+        exit(EXIT_FAILURE);
     }
 }
 
@@ -213,8 +212,10 @@ void Foam::AmgXWrapper::initComms(const int &commId)
 
     cudaSetDevice(devID_);
 
+    MPI_Barrier(globalWorld_);
+
     // split the global world into a world involved in AmgX and a null world
-    MPI_Comm_split(globalWorld_, gpuProc_, 0, &globalGpuWorld_);
+    MPI_Comm_split(globalWorld_, (int) gpuProc_, 0, &globalGpuWorld_);
 
     // get size and rank for the communicator corresponding to gpuWorld
     if (gpuProc_)
@@ -232,7 +233,7 @@ void Foam::AmgXWrapper::initComms(const int &commId)
     MPI_Comm_size(gpuWorld_, &gpuWorldSize_);
     MPI_Comm_rank(gpuWorld_, &myGpuWorldRank_);
 
-    MPI_Barrier(MPI_COMM_WORLD);
+    MPI_Barrier(globalWorld_);
 }
 
 
@@ -364,25 +365,6 @@ void Foam::AmgXWrapper::setOperator
         const label nLocalRows = matrix->ownerStart().size() - 1;
         const label nLocalNz = matrix->colIndices().size();
         const label nBlocks = matrix->nBlocks();
-
-        //- Print matrix converted to check
-        /*string fileName = "ownStart-escape" + std::to_string(Pstream::myProcNo());
-        std::ofstream outFile1(fileName); //, std::ios_base::app);
-        outFile1 << "ownerStart:" << nl;
-        for(int i=0; i< nLocalRows+1; ++i) outFile1 << matrix->ownerStart().cdata()[i] << nl;
-        outFile1.close();
-
-        fileName = "colIndices-escape" + std::to_string(Pstream::myProcNo());
-        std::ofstream outFile2(fileName);
-        outFile2 << "colIndeces:" << nl;
-        for(int i=0; i< nLocalNz; ++i) outFile2 << matrix->colIndices().cdata()[i] << nl;
-        outFile2.close();
-
-        fileName = "values-escape" + std::to_string(Pstream::myProcNo());
-        std::ofstream outFile3(fileName);
-        outFile3 << "values:" << nl;
-        for(int i=0; i< nLocalNz; ++i) outFile3 << matrix->values().cdata()[i] << nl;
-        outFile3.close();*/
         
         //- Check the matrix size is not larger than tolerated by AmgX
         if(nLocalRows > std::numeric_limits<int>::max())
@@ -435,7 +417,7 @@ void Foam::AmgXWrapper::setOperator
         }
 
         //- upload matrix A to AmgX
-        if (globalGpuWorldSize_ == 1) //!Pstream::parRun())
+        if (globalGpuWorldSize_ == 1 || !Pstream::parRun())
         {
             AMGX_matrix_upload_all(
                 AmgXA, nLocalRows, nLocalNz, nBlocks, nBlocks,
@@ -480,8 +462,6 @@ void Foam::AmgXWrapper::setOperator
         AMGX_vector_bind(AmgXP, AmgXA);
         AMGX_vector_bind(AmgXRHS, AmgXA);
     }
-
-    MPI_Barrier(gpuWorld_);
 
     if(matrix->isConsolidated())
     {
@@ -590,7 +570,7 @@ void Foam::AmgXWrapper::solve
 
         if(matrix->isConsolidated()) cudaDeviceSynchronize();
     }
-    MPI_Barrier(gpuWorld_); //necessary
+    if(Pstream::parRun()) MPI_Barrier(gpuWorld_); //necessary
 
     if (matrix->isConsolidated())
     {
@@ -600,15 +580,6 @@ void Foam::AmgXWrapper::solve
         cudaDeviceSynchronize();
         MPI_Barrier(gpuWorld_);
     }
-
-    // double* psi;
-    // psi = new double[nRows];
-    // cudaMemcpy((void*)psi, (const void*)p, sizeof(double)*nRows, cudaMemcpyDeviceToHost );
-    // std::string fileName = "pscalar" + std::to_string(Pstream::myProcNo());
-    // std::ofstream outFile4(fileName);
-    // outFile4 << "pscalar:" << nl;
-    // for(int i=0; i< nRows; ++i) outFile4 << psi[i] << nl;
-    // outFile4.close();
 }
 
 
