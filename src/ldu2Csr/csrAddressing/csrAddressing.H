@@ -47,6 +47,7 @@ SourceFiles
 #include "Enum.H"
 #include "scalar.H"
 #include "lduMatrix.H"
+#include "csrAddressingExecutor.H"
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
@@ -67,6 +68,7 @@ class csrAddressing
 
     // Private methods
 
+    static csrAddressingExecutor csrAddrExec_;
 
 protected:
     //- Protected Data
@@ -74,71 +76,77 @@ protected:
         //- Number of blocks
         label nBlocks_ = 1;
 
+        //- Number of local rows
+        label nOwnerStart_ = 0;
+
+        //- Number of local Nz
+        label nLocalNz_ = 0;
+
         //- Numbers of non-zeros per row
-        labelList *ownerStartPtr_;
+        label* ownerStartPtr_;
 
         //- Column indices array
-        labelList *colIndicesPtr_;
+        label* colIndicesPtr_;
 
         //- Permutation ldu2csr array
-        labelList *ldu2csrPerm_;
+        label* ldu2csrPerm_;
 
     //- Protected functions
         void initializeAddressing
         (
-            const int   nCells,
-            const int   nInternalFaces,
-            const int   totNnz,
-            const int * const owner,
-            const int * const neighbour,
-                  int * tmpPerm,
-                  int * rowIndTmp,
-                  int * colIndTmp
+            const label   nCells,
+            const label   nInternalFaces,
+            const label   totNnz,
+            const label * const owner,
+            const label * const neighbour,
+                  label * tmpPerm,
+                  label * rowIndTmp,
+                  label * colIndTmp
         );
 
         void initializeAddressingExt
         (
-            const int   nCells,
-            const int   nInternalFaces,
-            const int   nnzExt,
-            const int   totNnz,
-            const int * const owner,
-            const int * const neighbour,
-            const int * const extRows,
-            const int * const extCols,
-                  int * tmpPerm,
-                  int * rowIndTmp,
-                  int * colIndTmp
+            const label   nCells,
+            const label   nInternalFaces,
+            const label   nnzExt,
+            const label   totNnz,
+            const label * const owner,
+            const label * const neighbour,
+            const label * const extRows,
+            const label * const extCols,
+                  label * tmpPerm,
+                  label * rowIndTmp,
+                  label * colIndTmp
         );
 
         void computeSorting
         (
-            const int   totNnz,
-            const int * const tmpPerm,
-            const int * const rowIndTmp,
-                    int * rowInd,
-                    int * ldu2csr
+            const label   totNnz,
+            const label * const tmpPerm,
+            const label * const rowIndTmp,
+                    label * rowInd,
+                    label * ldu2csr
         );
 
         void localToGlobalColIndices
         (
-            const int   nRows,
-            const int   nIntFaces,
-            const int   diagIndexGlobal,
-            const int   lowOffGlobal,
-            const int   uppOffGlobal,
-                  int * colIndicesGlobal
+            const label   nRows,
+            const label   nIntFaces,
+            const label   diagIndexGlobal,
+            const label   lowOffGlobal,
+            const label   uppOffGlobal,
+                  label * colIndicesGlobal
         );
 
         void applyAddressingPermutation
         (
-            const int   nCells,
-            const int   totNnz,
-            const int * const ldu2csr,
-            const int * const colIndTmp,
-            const int * const rowInd,
-                  int * colInd,
-                  int * ownStart
+            const label   nCells,
+            const label   totNnz,
+            const label * const ldu2csr,
+            const label * const colIndTmp,
+            const label * const rowInd,
+                  label * colInd,
+                  label * ownStart
         );
 
         //- Computation of the permutatrion array
@@ -167,11 +175,11 @@ public:
         //  The coefficients are initialized empty.
         csrAddressing();
 
-        //- Construct as copy
-        csrAddressing(const csrAddressing& A);
-
-        //- Construct as copy or re-use as specified.
-        csrAddressing(csrAddressing& A, bool reuse);
+//        //- Construct as copy
+//        csrAddressing(const csrAddressing& A);
+//
+//        //- Construct as copy or re-use as specified.
+//        csrAddressing(csrAddressing& A, bool reuse);
 
         //- Construct given an LDU addressed mesh and an Istream
         //- from which the coefficients are read
@@ -187,27 +195,38 @@ public:
         //- Access to addressing
 
             //- Number of blocks
-            const label& nBlocks() const
+            label nBlocks() const
             {
                 return nBlocks_;
             }
 
+            //- Number of local rows
+            label nOwnerStart() const
+            {
+                return nOwnerStart_;
+            }
+            //- Number of blocks
+            label nLocalNz() const
+            {
+                return nLocalNz_;
+            }
+
             //- Return vector of the ownerStart
-            const labelList& ownerStart() const noexcept
+            const label* ownerStart() const
             {
-                return *ownerStartPtr_;
+                return ownerStartPtr_;
             }
 
             //- Return the column index
-            const labelList& colIndices() const noexcept
+            const label* colIndices() const
             {
-                return *colIndicesPtr_;
+                return colIndicesPtr_;
             }
 
             //- Return the column index
-            const labelList& ldu2csrPerm() const noexcept
+            const label* ldu2csrPerm() const
             {
-                return *ldu2csrPerm_;
+                return ldu2csrPerm_;
             }
 
             //- Return true if the permutation has been computed

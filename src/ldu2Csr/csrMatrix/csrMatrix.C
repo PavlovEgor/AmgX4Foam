@@ -40,39 +40,39 @@ Foam::csrMatrix::csrMatrix()
     valuesPtr_(nullptr)
 {}
 
-Foam::csrMatrix::csrMatrix(const csrMatrix& A)
-:
-    csrAddressing(A),
-    valuesPtr_(nullptr)
-{
-    if (A.valuesPtr_)
-    {
-        valuesPtr_ = new scalarField(*(A.valuesPtr_));
-    }
-}
-
-
-Foam::csrMatrix::csrMatrix(csrMatrix& A, bool reuse)
-:
-    csrAddressing(A, reuse),
-    valuesPtr_(nullptr)
-{
-    if (reuse)
-    {
-        if (A.valuesPtr_)
-        {
-            valuesPtr_ = A.valuesPtr_;
-            A.valuesPtr_ = nullptr;
-        }
-    }
-    else
-    {
-        if (A.valuesPtr_)
-        {
-            valuesPtr_ = new scalarField(*(A.valuesPtr_));
-        }
-    }
-}
+//Foam::csrMatrix::csrMatrix(const csrMatrix& A)
+//:
+//    csrAddressing(A),
+//    valuesPtr_(nullptr)
+//{
+//    if (A.valuesPtr_)
+//    {
+//        valuesPtr_ = new scalarField(*(A.valuesPtr_));
+//    }
+//}
+//
+//
+//Foam::csrMatrix::csrMatrix(csrMatrix& A, bool reuse)
+//:
+//    csrAddressing(A, reuse),
+//    valuesPtr_(nullptr)
+//{
+//    if (reuse)
+//    {
+//        if (A.valuesPtr_)
+//        {
+//            valuesPtr_ = A.valuesPtr_;
+//            A.valuesPtr_ = nullptr;
+//        }
+//    }
+//    else
+//    {
+//        if (A.valuesPtr_)
+//        {
+//            valuesPtr_ = new scalarField(*(A.valuesPtr_));
+//        }
+//    }
+//}
 
 // * * * * * * * * * * * *  Public Member Functions * * * * * * * * * * * *  //
 
@@ -139,7 +139,7 @@ void Foam::csrMatrix::applyPermutation(const lduMatrix& lduMatrix)
     applyValuePermutation
     (
         totNnz,
-        ldu2csrPerm_->cdata(),
+        ldu2csrPerm_,
         valuesTmp.cdata(),
         valuesPtr_->data()
     );
@@ -229,7 +229,7 @@ void Foam::csrMatrix:: applyPermutation
     applyValuePermutation
     (
         totNnz,
-        ldu2csrPerm_->cdata(),
+        ldu2csrPerm_,
         valuesTmp.cdata(),
         valuesPtr_->data()
     );

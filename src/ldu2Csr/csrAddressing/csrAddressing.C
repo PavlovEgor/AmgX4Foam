@@ -32,6 +32,11 @@ License
 
 // * * * * * * * * * * * * * * Static Data Members * * * * * * * * * * * * * //
 
+#ifdef have_cuda
+Foam::csrAddressingExecutor Foam::csrAddressing::csrAddrExec_ = cudaCsrAddressingExecutor();
+#else
+Foam::csrAddressingExecutor Foam::csrAddressing::csrAddrExec_ = cpuCsrAddressingExecutor();
+#endif
 
 // * * * * * * * * * * * * * * * Constructors * * * * * * * * * * * * * * * //
 
@@ -42,73 +47,73 @@ Foam::csrAddressing::csrAddressing()
     ldu2csrPerm_(nullptr)
 {}
 
-Foam::csrAddressing::csrAddressing(const csrAddressing& A)
-:
-    ownerStartPtr_(nullptr),
-    colIndicesPtr_(nullptr),
-    ldu2csrPerm_(nullptr)
-{
-    if (A.ownerStartPtr_)
-    {
-        ownerStartPtr_ = new labelList(*(A.ownerStartPtr_));
-    }
-
-    if (A.colIndicesPtr_)
-    {
-        colIndicesPtr_ = new labelList(*(A.colIndicesPtr_));
-    }
-
-    if (A.ldu2csrPerm_)
-    {
-        ldu2csrPerm_ = new labelList(*(A.ldu2csrPerm_));
-    }
-}
-
-
-Foam::csrAddressing::csrAddressing(csrAddressing& A, bool reuse)
-:
-    ownerStartPtr_(nullptr),
-    colIndicesPtr_(nullptr),
-    ldu2csrPerm_(nullptr)
-{
-    if (reuse)
-    {
-        if (A.ownerStartPtr_)
-        {
-            ownerStartPtr_ = A.ownerStartPtr_;
-            A.ownerStartPtr_ = nullptr;
-        }
-
-        if (A.colIndicesPtr_)
-        {
-            colIndicesPtr_ = A.colIndicesPtr_;
-            A.colIndicesPtr_ = nullptr;
-        }
-
-        if (A.ldu2csrPerm_)
-        {
-            ldu2csrPerm_ = A.ldu2csrPerm_;
-            A.ldu2csrPerm_ = nullptr;
-        }
-    }
-    else
-    {
-        if (A.ownerStartPtr_)
-        {
-            ownerStartPtr_ = new labelList(*(A.ownerStartPtr_));
-        }
-
-        if (A.colIndicesPtr_)
-        {
-            colIndicesPtr_ = new labelList(*(A.colIndicesPtr_));
-        }
-
-        if (A.ldu2csrPerm_)
-        {
-            ldu2csrPerm_ = new labelList(*(A.ldu2csrPerm_));
-        }
-    }
-}
+//Foam::csrAddressing::csrAddressing(const csrAddressing& A)
+//:
+//    ownerStartPtr_(nullptr),
+//    colIndicesPtr_(nullptr),
+//    ldu2csrPerm_(nullptr)
+//{
+//    if (A.ownerStartPtr_)
+//    {
+//        ownerStartPtr_ = new labelList(*(A.ownerStartPtr_));
+//    }
+//
+//    if (A.colIndicesPtr_)
+//    {
+//        colIndicesPtr_ = new labelList(*(A.colIndicesPtr_));
+//    }
+//
+//    if (A.ldu2csrPerm_)
+//    {
+//        ldu2csrPerm_ = new labelList(*(A.ldu2csrPerm_));
+//    }
+//}
+//
+//
+//Foam::csrAddressing::csrAddressing(csrAddressing& A, bool reuse)
+//:
+//    ownerStartPtr_(nullptr),
+//    colIndicesPtr_(nullptr),
+//    ldu2csrPerm_(nullptr)
+//{
+//    if (reuse)
+//    {
+//        if (A.ownerStartPtr_)
+//        {
+//            ownerStartPtr_ = A.ownerStartPtr_;
+//            A.ownerStartPtr_ = nullptr;
+//        }
+//
+//        if (A.colIndicesPtr_)
+//        {
+//            colIndicesPtr_ = A.colIndicesPtr_;
+//            A.colIndicesPtr_ = nullptr;
+//        }
+//
+//        if (A.ldu2csrPerm_)
+//        {
+//            ldu2csrPerm_ = A.ldu2csrPerm_;
+//            A.ldu2csrPerm_ = nullptr;
+//        }
+//    }
+//    else
+//    {
+//        if (A.ownerStartPtr_)
+//        {
+//            ownerStartPtr_ = new labelList(*(A.ownerStartPtr_));
+//        }
+//
+//        if (A.colIndicesPtr_)
+//        {
+//            colIndicesPtr_ = new labelList(*(A.colIndicesPtr_));
+//        }
+//
+//        if (A.ldu2csrPerm_)
+//        {
+//            ldu2csrPerm_ = new labelList(*(A.ldu2csrPerm_));
+//        }
+//    }
+//}
 
 // * * * * * * * * * * * *  Public Member Functions * * * * * * * * * * * *  //
 
@@ -126,7 +131,9 @@ void Foam::csrAddressing::finalizeAdressing()
 
     if (ldu2csrPerm_)
     {
-        delete ldu2csrPerm_;
+        //delete ldu2csrPerm_;
+        std::visit([this](const auto& exec)
+               {exec.template clear<label>(this->ldu2csrPerm_); }, csrAddrExec_);
     }
 }
 
@@ -138,15 +145,18 @@ void Foam::csrAddressing::clearAddressing()
 {
     if (ownerStartPtr_)
     {
-        delete ownerStartPtr_;
+        //delete ownerStartPtr_;
+        std::visit([this](const auto& exec)
+               {exec.template clear<label>(this->ownerStartPtr_); }, csrAddrExec_);
     }
 
     if (colIndicesPtr_)
     {
-        delete colIndicesPtr_;
+        //delete colIndicesPtr_;
+        std::visit([this](const auto& exec)
+               {exec.template clear<label>(this->colIndicesPtr_); }, csrAddrExec_);
     }
 }
-
 
 //- Find permutation array and new addressing vectors (no interface)
 void Foam::csrAddressing::computePermutation(const lduAddressing * addr)
@@ -158,14 +168,42 @@ void Foam::csrAddressing::computePermutation(const lduAddressing * addr)
     const label nIntFaces = own.size();
     const label totNnz = nCells + 2*nIntFaces;
 
-    ownerStartPtr_ = new labelList(nCells+1, Foam::Zero);
-    ldu2csrPerm_ = new labelList(totNnz);
-    colIndicesPtr_ = new labelList(totNnz);
+    nOwnerStart_ = nCells+1;
+    nLocalNz_ = totNnz;
 
-    labelList rowIndices(totNnz);
-    labelList tmpPerm(totNnz);
-    labelList rowindicesTmp(totNnz);
-    labelList colindicesTmp(totNnz);
+    //ownerStartPtr_ = new label[nCells+1];
+    //ldu2csrPerm_ = new label[totNnz];
+    //colIndicesPtr_ = new label[totNnz];
+
+    std::visit([this, nCells](const auto& exec)
+               { this->ownerStartPtr_ = exec.template alloc<label>(nCells+1); },
+               csrAddrExec_);
+    std::visit([this, totNnz](const auto& exec)
+               { this->colIndicesPtr_ = exec.template alloc<label>(totNnz); },
+               csrAddrExec_);
+    std::visit([this, totNnz](const auto& exec)
+               { this->ldu2csrPerm_ = exec.template alloc<label>(totNnz); },
+               csrAddrExec_);
+
+    label* rowIndices = nullptr;
+    label* tmpPerm = nullptr;
+	label* rowindicesTmp = nullptr;
+	label* colindicesTmp = nullptr;
+    std::visit([&rowIndices, totNnz](const auto& exec)
+               { rowIndices = exec.template alloc<label>(totNnz); },
+               csrAddrExec_);
+    std::visit([&tmpPerm, totNnz](const auto& exec)
+               { tmpPerm = exec.template alloc<label>(totNnz); },
+               csrAddrExec_);
+    std::visit([&rowindicesTmp, totNnz](const auto& exec)
+               { rowindicesTmp = exec.template alloc<label>(totNnz); },
+               csrAddrExec_);
+    std::visit([&colindicesTmp, totNnz](const auto& exec)
+               { colindicesTmp = exec.template alloc<label>(totNnz); },
+               csrAddrExec_);
+    //labelList tmpPerm(totNnz);
+    //labelList rowindicesTmp(totNnz);
+    //labelList colindicesTmp(totNnz);
 
     // Initialize: tmpPerm = [0, 1, ... totNnz-1]
     //             rowindicesTmp = [0, ... nCells-1, (owner), (neighbour)]
@@ -177,19 +215,19 @@ void Foam::csrAddressing::computePermutation(const lduAddressing * addr)
         totNnz,
         own.cdata(),
         neigh.cdata(),
-        tmpPerm.data(),
-        rowindicesTmp.data(),
-        colindicesTmp.data()
+        tmpPerm,
+        rowindicesTmp,
+        colindicesTmp
     );
 
     // Compute sorting to obtain permutation
     computeSorting
     (
         totNnz,
-        tmpPerm.data(),
-        rowindicesTmp.data(),
-        rowIndices.data(),
-        ldu2csrPerm_->data()
+        tmpPerm,
+        rowindicesTmp,
+        rowIndices,
+        ldu2csrPerm_
     );
 
     // Apply permutation vector to find colIndices + compute ownerStart
@@ -197,12 +235,20 @@ void Foam::csrAddressing::computePermutation(const lduAddressing * addr)
     (
         nCells,
         totNnz,
-        ldu2csrPerm_->cdata(),
-        colindicesTmp.cdata(),
-        rowIndices.cdata(),
-        colIndicesPtr_->data(),
-        ownerStartPtr_->data()
+        ldu2csrPerm_,
+        colindicesTmp,
+        rowIndices,
+        colIndicesPtr_,
+        ownerStartPtr_
     );
+    std::visit([rowIndices](const auto& exec)
+               {exec.template clear<label>(rowIndices); }, csrAddrExec_);
+    std::visit([tmpPerm](const auto& exec)
+               {exec.template clear<label>(tmpPerm); }, csrAddrExec_);
+    std::visit([rowindicesTmp](const auto& exec)
+               {exec.template clear<label>(rowindicesTmp); }, csrAddrExec_);
+    std::visit([colindicesTmp](const auto& exec)
+               {exec.template clear<label>(colindicesTmp); }, csrAddrExec_);
 }
 
 
@@ -299,14 +345,47 @@ void Foam::csrAddressing::computePermutation
 
     const label totNnz = nCells + 2*nIntFaces + nnzExt;
 
-    ownerStartPtr_ = new labelList(nCells+1, Foam::Zero);
-    ldu2csrPerm_ = new labelList(totNnz);
-    colIndicesPtr_ = new labelList(totNnz);
+    //ownerStartPtr_ = new labelList(nCells+1, Foam::Zero);
+    //ldu2csrPerm_ = new labelList(totNnz);
+    //colIndicesPtr_ = new labelList(totNnz);
+    //ownerStartPtr_ = new label[nCells+1];
+    //ldu2csrPerm_ = new label[totNnz];
+    //colIndicesPtr_ = new label[totNnz];
 
-    labelList rowIndices(totNnz);
-    labelList tmpPerm(totNnz);
-    labelList rowindicesTmp(totNnz);
-    labelList colindicesTmp(totNnz);
+    nOwnerStart_ = nCells+1;
+    nLocalNz_ = totNnz;
+    std::visit([this, nCells](const auto& exec)
+               { this->ownerStartPtr_ = exec.template alloc<label>(nCells+1); },
+               csrAddrExec_);
+    std::visit([this, totNnz](const auto& exec)
+               { this->colIndicesPtr_ = exec.template alloc<label>(totNnz); },
+               csrAddrExec_);
+    std::visit([this, totNnz](const auto& exec)
+               { this->ldu2csrPerm_ = exec.template alloc<label>(totNnz); },
+               csrAddrExec_);
+
+    label* rowIndices = nullptr;
+    label* tmpPerm = nullptr;
+	label* rowindicesTmp = nullptr;
+	label* colindicesTmp = nullptr;
+
+    std::visit([&rowIndices, totNnz](const auto& exec)
+               { rowIndices = exec.template alloc<label>(totNnz); },
+               csrAddrExec_);
+    std::visit([&tmpPerm, totNnz](const auto& exec)
+               { tmpPerm = exec.template alloc<label>(totNnz); },
+               csrAddrExec_);
+    std::visit([&rowindicesTmp, totNnz](const auto& exec)
+               { rowindicesTmp = exec.template alloc<label>(totNnz); },
+               csrAddrExec_);
+    std::visit([&colindicesTmp, totNnz](const auto& exec)
+               { colindicesTmp = exec.template alloc<label>(totNnz); },
+               csrAddrExec_);
+
+    //labelList rowIndices(totNnz);
+    //labelList tmpPerm(totNnz);
+    //labelList rowindicesTmp(totNnz);
+    //labelList colindicesTmp(totNnz);
 
     // Initialize: tmpPerm = [0, 1, ... totNnz-1]
     //             rowindicesTmp = [0, ... nCells-1, (owner), (neighbour), (extrows)]
@@ -321,19 +400,19 @@ void Foam::csrAddressing::computePermutation
         neigh.cdata(),
         extRows.cdata(),
         extCols.cdata(),
-        tmpPerm.data(),
-        rowindicesTmp.data(),
-        colindicesTmp.data()
+        tmpPerm,
+        rowindicesTmp,
+        colindicesTmp
     );
 
     // Compute sorting to obtain permutation
     computeSorting
     (
         totNnz,
-        tmpPerm.data(),
-        rowindicesTmp.data(),
-        rowIndices.data(),
-        ldu2csrPerm_->data()
+        tmpPerm,
+        rowindicesTmp,
+        rowIndices,
+        ldu2csrPerm_
     );
 
     // Make column indices from local to global
@@ -344,7 +423,7 @@ void Foam::csrAddressing::computePermutation
         diagIndexGlobal,
         lowOffGlobal,
         uppOffGlobal,
-        colindicesTmp.data()        
+        colindicesTmp
     );
 
     // Apply permutation vector to find colIndices + compute ownerStart
@@ -352,11 +431,11 @@ void Foam::csrAddressing::computePermutation
     (
         nCells,
         totNnz,
-        ldu2csrPerm_->cdata(),
-        colindicesTmp.cdata(),
-        rowIndices.cdata(),
-        colIndicesPtr_->data(),
-        ownerStartPtr_->data()
+        ldu2csrPerm_,
+        colindicesTmp,
+        rowIndices,
+        colIndicesPtr_,
+        ownerStartPtr_
     );
 }
 

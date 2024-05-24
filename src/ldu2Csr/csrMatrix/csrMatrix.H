@@ -115,11 +115,11 @@ public:
         //  The coefficients are initialized empty.
         csrMatrix();
 
-        //- Construct as copy
-        csrMatrix(const csrMatrix& A);
-
-        //- Construct as copy or re-use as specified.
-        csrMatrix(csrMatrix& A, bool reuse);
+//        //- Construct as copy
+//        csrMatrix(const csrMatrix& A);
+//
+//        //- Construct as copy or re-use as specified.
+//        csrMatrix(csrMatrix& A, bool reuse);
 
         //- Construct given an LDU addressed mesh and an Istream
         //- from which the coefficients are read

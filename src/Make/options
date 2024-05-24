@@ -16,3 +16,6 @@ LIB_LIBS = \
     -L$(FOAM_USER_LIBBIN)
 
 CC += -cuda
+
+WMAKE_LOCAL=$(MAKE_DIR)/../../wmake
+include $(WMAKE_LOCAL)/c++

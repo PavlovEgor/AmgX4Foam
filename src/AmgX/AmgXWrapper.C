@@ -254,8 +254,8 @@ void Foam::AmgXWrapper::setOperator
     const csrAddressing* matrix
 )
 {
-    const label nLocalRows = matrix->ownerStart().size() - 1;
-    const label nLocalNz = matrix->colIndices().size();
+    const label nLocalRows = matrix->nOwnerStart() - 1;
+    const label nLocalNz = matrix->nLocalNz();
     const label nBlocks = matrix->nBlocks();
     
     //- Check the matrix size is not larger than tolerated by AmgX
@@ -284,20 +284,19 @@ void Foam::AmgXWrapper::setOperator
         /*AMGX_pin_memory((void*) matrix->ownerStart().cdata(), (nLocalRows+1)*sizeof(int));
         AMGX_pin_memory((void*) matrix->colIndices().cdata(), (nLocalNz+1)*sizeof(int));
         AMGX_pin_memory((void*) matrix->values().cdata(), (nLocalRows+1)*sizeof(double));*/
-        cudaMalloc((void**) &ownStart, sizeof(int)*(nLocalRows+1));
-        cudaMalloc((void**) &colInd, sizeof(int)*nLocalNz);
+        cudaMalloc((void**) &ownStart, sizeof(label)*(nLocalRows+1));
+        cudaMalloc((void**) &colInd, sizeof(label)*nLocalNz);
         cudaMalloc((void**) &matValues, sizeof(double)*nLocalNz);
-        cudaMemcpy((void*) ownStart, (const void*) matrix->ownerStart().cdata(), sizeof(int)*(nLocalRows+1), cudaMemcpyHostToDevice);
-        cudaMemcpy((void*) colInd, (const void*) matrix->colIndices().cdata(), sizeof(int)*nLocalNz, cudaMemcpyHostToDevice);
+        cudaMemcpy((void*) ownStart, (const void*) matrix->ownerStart(), sizeof(label)*(nLocalRows+1), cudaMemcpyHostToDevice);
+        cudaMemcpy((void*) colInd, (const void*) matrix->colIndices(), sizeof(label)*nLocalNz, cudaMemcpyHostToDevice);
         cudaMemcpy((void*) matValues, (const void*) matrix->values().cdata(), sizeof(double)*nLocalNz, cudaMemcpyHostToDevice);
     }
     else
     {
-        ownStart = matrix->ownerStart().cdata();
-        colInd = matrix->colIndices().cdata();
+        ownStart = matrix->ownerStart();
+        colInd = matrix->colIndices();
         matValues = matrix->values().cdata();
     }
-
     //- upload matrix A to AmgX
     if (!Pstream::parRun())
     {
@@ -351,8 +350,8 @@ void Foam::AmgXWrapper::updateOperator
     const csrAddressing* matrix
 )
 {
-    const label nLocalRows = matrix->ownerStart().size() - 1;
-    const label nLocalNz = matrix->values().size();
+    const label nLocalRows = matrix->nOwnerStart() - 1;
+    const label nLocalNz = matrix->nLocalNz();
     const void * matValues = matrix->values().cdata();
 
     //- Replace the coefficients for the CSR matrix A within AmgX
@@ -371,7 +370,7 @@ void Foam::AmgXWrapper::solve
     const csrAddressing* matrix
 )
 {
-    const label nLocalRows = matrix->ownerStart().size() - 1;
+    const label nLocalRows = matrix->nOwnerStart() - 1;
     const int nBlocks = matrix->nBlocks();
     
     //- Upload vectors to AmgX
