@@ -31,11 +31,21 @@ License
 
 #include "PstreamGlobals.H"
 
+#include <iostream>
+#include <fstream>
+
 // initialize AmgXWrapper::count to 0
 int Foam::AmgXWrapper::count = 0;
 
 // initialize AmgXWrapper::rsrc to nullptr;
 AMGX_resources_handle Foam::AmgXWrapper::rsrc = nullptr;
+
+void checkCudaError(cudaError_t err, const char* msg) {
+    if (err != cudaSuccess) {
+        std::cerr << msg << " (error code " << err << "): " << cudaGetErrorString(err) << std::endl;
+        exit(EXIT_FAILURE);
+    }
+}
 
 
 // * * * * * * * * * * * * * * * * Constructors  * * * * * * * * * * * * * * //
@@ -124,10 +134,14 @@ void Foam::AmgXWrapper::initialiseMatrixComms(csrAdressing* matrix)
 {
     labelList gpuWorldProcs(gpuWorldSize_);
 
-    MPI_Allgather(&myGlobalWorldRank_, 1, MPI_INT, gpuWorldProcs.data(), 1, MPI_INT, globalWorld_);
+    MPI_Allgather(&myGlobalWorldRank_, 1, MPI_INT, gpuWorldProcs.data(), 1, MPI_INT, gpuWorld_);
+
+    MPI_Barrier(globalWorld_);
 
     label gpuWorldIdx = UPstream::allocateCommunicator(globalWorldIdx_, gpuWorldProcs);
     matrix->initializeComms(gpuWorldIdx, gpuProc_);
+
+    MPI_Barrier(globalWorld_);
 }
 
 
@@ -155,7 +169,6 @@ void Foam::AmgXWrapper::initComms(const int &commId)
     //- get size and rank for communicator
     globalWorldSize_ = Pstream::nProcs(commId);
     myGlobalWorldRank_ = Pstream::myProcNo(commId);
-    Info << "---> number of processes: " << globalWorldSize_ << nl;
 
     // Get the communicator for processors on the same node (local world)
     MPI_Comm_split_type(globalWorld_, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL, &localWorld_);
@@ -164,11 +177,8 @@ void Foam::AmgXWrapper::initComms(const int &commId)
     // get size and rank for local communicator
     MPI_Comm_size(localWorld_, &localWorldSize_);
     MPI_Comm_rank(localWorld_, &myLocalWorldRank_);
-    Info << "---> number of processes per node: " << localWorldSize_ << nl;
 
     cudaGetDeviceCount(&nDevs_);
-
-    Info << "---> number of devices available per node: " << nDevs_ << nl;
     
     if (localWorldSize_ == nDevs_)
     {
@@ -212,7 +222,6 @@ void Foam::AmgXWrapper::initComms(const int &commId)
         MPI_Comm_set_name(globalGpuWorld_, "globalGpuWorld");
         MPI_Comm_size(globalGpuWorld_, &globalGpuWorldSize_);
         MPI_Comm_rank(globalGpuWorld_, &myGlobalGpuWorldRank_);
-        Info << "---> number of devices globally used: " << globalGpuWorldSize_ << nl;
     }
 
     // split local world into worlds corresponding to each CUDA device
@@ -222,7 +231,8 @@ void Foam::AmgXWrapper::initComms(const int &commId)
     // get size and rank for the communicator corresponding to myWorld
     MPI_Comm_size(gpuWorld_, &gpuWorldSize_);
     MPI_Comm_rank(gpuWorld_, &myGpuWorldRank_);
-    Info << "---> number of processe per device: " << gpuWorldSize_ << nl;
+
+    MPI_Barrier(MPI_COMM_WORLD);
 }
 
 
@@ -349,29 +359,48 @@ void Foam::AmgXWrapper::setOperator
     const csrAdressing* matrix
 )
 {
-    const label nLocalRows = matrix->ownerStart().size() - 1;
-    const label nLocalNz = matrix->colIndices().size();
-    const label nBlocks = matrix->nBlocks();
-    
-    //- Check the matrix size is not larger than tolerated by AmgX
-    if(nLocalRows > std::numeric_limits<int>::max())
-    {
-        fprintf(stderr,
-                "AmgX does not support a global number of rows greater than "
-                "what can be stored in 32 bits (nGlobalRows = %d).\n",
-                nLocalRows);
-    }
-
-    if (nLocalNz > std::numeric_limits<int>::max())
-    {
-        fprintf(stderr,
-                "AmgX does not support non-zeros per (consolidated) rank greater than"
-                "what can be stored in 32 bits (nLocalNz = %d).\n",
-                nLocalNz);
-    }
-
     if(gpuProc_)
-    {
+    {    
+        const label nLocalRows = matrix->ownerStart().size() - 1;
+        const label nLocalNz = matrix->colIndices().size();
+        const label nBlocks = matrix->nBlocks();
+
+        //- Print matrix converted to check
+        /*string fileName = "ownStart-escape" + std::to_string(Pstream::myProcNo());
+        std::ofstream outFile1(fileName); //, std::ios_base::app);
+        outFile1 << "ownerStart:" << nl;
+        for(int i=0; i< nLocalRows+1; ++i) outFile1 << matrix->ownerStart().cdata()[i] << nl;
+        outFile1.close();
+
+        fileName = "colIndices-escape" + std::to_string(Pstream::myProcNo());
+        std::ofstream outFile2(fileName);
+        outFile2 << "colIndeces:" << nl;
+        for(int i=0; i< nLocalNz; ++i) outFile2 << matrix->colIndices().cdata()[i] << nl;
+        outFile2.close();
+
+        fileName = "values-escape" + std::to_string(Pstream::myProcNo());
+        std::ofstream outFile3(fileName);
+        outFile3 << "values:" << nl;
+        for(int i=0; i< nLocalNz; ++i) outFile3 << matrix->values().cdata()[i] << nl;
+        outFile3.close();*/
+        
+        //- Check the matrix size is not larger than tolerated by AmgX
+        if(nLocalRows > std::numeric_limits<int>::max())
+        {
+            fprintf(stderr,
+                    "AmgX does not support a global number of rows greater than "
+                    "what can be stored in 32 bits (nGlobalRows = %d).\n",
+                    nLocalRows);
+        }
+
+        if (nLocalNz > std::numeric_limits<int>::max())
+        {
+            fprintf(stderr,
+                    "AmgX does not support non-zeros per (consolidated) rank greater than"
+                    "what can be stored in 32 bits (nLocalNz = %d).\n",
+                    nLocalNz);
+        }
+
         const int * ownStart; // = matrix->ownerStart().cdata();
         const int * colInd; // = matrix->colIndices().cdata();
         const void * matValues; // = matrix->values().cdata();
@@ -391,8 +420,11 @@ void Foam::AmgXWrapper::setOperator
             if(matrix->isConsolidated())
             {
                 label nConsRows = matrix->nConsRows();
-                cudaMalloc((void**) &pCons_, sizeof(scalar)*nConsRows);
-                cudaMalloc((void**) &rhsCons_, sizeof(scalar)*nConsRows);
+                checkCudaError(cudaMalloc((void**) &pCons_, sizeof(scalar)*nConsRows), "pCons_ cudaMalloc");
+                checkCudaError(cudaMalloc((void**) &rhsCons_, sizeof(scalar)*nConsRows), "rhsCons_ cudamalloc");
+
+                cudaIpcGetMemHandle(&pConsHandle_, pCons_);
+                cudaIpcGetMemHandle(&rhsConsHandle_, rhsCons_);
             }
         }
         else
@@ -403,7 +435,7 @@ void Foam::AmgXWrapper::setOperator
         }
 
         //- upload matrix A to AmgX
-        if (!Pstream::parRun())
+        if (globalGpuWorldSize_ == 1) //!Pstream::parRun())
         {
             AMGX_matrix_upload_all(
                 AmgXA, nLocalRows, nLocalNz, nBlocks, nBlocks,
@@ -415,10 +447,10 @@ void Foam::AmgXWrapper::setOperator
             AMGX_distribution_create(&dist, cfg);
 
             //- Must persist until after we call upload
-            labelList offsets(globalGpuWorldSize_ + 1, 0);
+            labelList offsets(globalGpuWorldSize_ + 1, Zero);
 
             //- Determine the number of rows per GPU
-            labelList nRowsPerGPU(globalGpuWorldSize_, 0);
+            labelList nRowsPerGPU(globalGpuWorldSize_, Zero);
             /*nRowsPerGPU.data()[globalGpuWorldSize_] = nLocalRows;
             Pstream::allGatherList(nRowsPerGPU, UPstream::msgType(), gpuGlobalWorld_);*/
             MPI_Allgather(&nLocalRows, 1, MPI_INT, nRowsPerGPU.data(), 1, MPI_INT, globalGpuWorld_);
@@ -448,6 +480,20 @@ void Foam::AmgXWrapper::setOperator
         AMGX_vector_bind(AmgXP, AmgXA);
         AMGX_vector_bind(AmgXRHS, AmgXA);
     }
+
+    MPI_Barrier(gpuWorld_);
+
+    if(matrix->isConsolidated())
+    {
+        MPI_Bcast(&pConsHandle_, sizeof(cudaIpcMemHandle_t), MPI_BYTE, 0, gpuWorld_);
+        MPI_Bcast(&rhsConsHandle_, sizeof(cudaIpcMemHandle_t), MPI_BYTE, 0, gpuWorld_);
+        
+        if(!gpuProc_)
+        {
+            cudaIpcOpenMemHandle((void**) &pCons_, pConsHandle_, cudaIpcMemLazyEnablePeerAccess );
+            cudaIpcOpenMemHandle((void**) &rhsCons_, rhsConsHandle_, cudaIpcMemLazyEnablePeerAccess );
+        }
+    }
 }
 
 
@@ -457,12 +503,12 @@ void Foam::AmgXWrapper::updateOperator
     const csrAdressing* matrix
 )
 {
-    const label nLocalRows = matrix->ownerStart().size() - 1;
-    const label nLocalNz = matrix->values().size();
-    const void * matValues = matrix->values().cdata();
-
     if(gpuProc_)
     {
+        const label nLocalRows = matrix->ownerStart().size() - 1;
+        const label nLocalNz = matrix->values().size();
+        const void * matValues = matrix->values().cdata();
+
         //- Replace the coefficients for the CSR matrix A within AmgX
         AMGX_matrix_replace_coefficients(AmgXA, nLocalRows, nLocalNz, matValues, nullptr);
 
@@ -475,38 +521,54 @@ void Foam::AmgXWrapper::updateOperator
 /* \implements AmgXWrapper::solve */
 void Foam::AmgXWrapper::solve
 (
+    const int nLocalRows,
     scalar* pscalar,
     const scalar* bscalar,
     const csrAdressing* matrix
 )
-{
-    const label nLocalRows = matrix->ownerStart().size() - 1;
-    const int nBlocks = matrix->nBlocks();
-
+{    
     scalar * p;
     const scalar * b;
     label consDispl;
+    label nRows, nBlocks;
+
+    // nLocalRows = matrix->ownerStart().size() - 1;
+    nBlocks = matrix->nBlocks();
 
     if(matrix->isConsolidated())
-    {
+    {       
         consDispl = matrix->rowsConsDisp().cdata()[myGpuWorldRank_];
-        cudaMemcpy((void*) &pCons_[consDispl], pscalar, nLocalRows*sizeof(scalar), cudaMemcpyDefault);
-        cudaMemcpy((void*) &rhsCons_[consDispl], bscalar, nLocalRows*sizeof(scalar), cudaMemcpyDefault);
-
+        cudaMemcpy((void*) &pCons_[consDispl], pscalar, nLocalRows*sizeof(scalar), cudaMemcpyHostToDevice); // cudaMemcpyDefault);
+        checkCudaError(cudaMemcpy((void**) &(rhsCons_[consDispl]), (void*) bscalar, (size_t) (nLocalRows*sizeof(scalar)), cudaMemcpyDefault ), // cudaMemcpyDefault);
+                       "b cudaMemcpy");
         p = pCons_;
         b = rhsCons_;
+        nRows = matrix->nConsRows();
+
+        cudaDeviceSynchronize();
+        MPI_Barrier(gpuWorld_);
+
+        /*double* rhs;
+        rhs = new double[nRows];
+        cudaMemcpy((void*)rhs, (const void*)b, sizeof(double)*nRows, cudaMemcpyDeviceToHost );
+        std::string fileName = "bscalar" + std::to_string(Pstream::myProcNo());
+        std::ofstream outFile5(fileName);
+        outFile5 << "bscalar:" << nl;
+        for(int i=0; i< nRows; ++i) outFile5 << rhs[i] << nl;
+        outFile5.close();*/
     }
     else
     {
         p = pscalar;
         b = bscalar;
+        nRows = nLocalRows;
     }
     
     if (gpuProc_)
-    {
+    {    
         //- Upload vectors to AmgX
-        AMGX_vector_upload(AmgXP, nLocalRows, nBlocks, p);
-        AMGX_vector_upload(AmgXRHS, nLocalRows, nBlocks, b);
+        AMGX_vector_upload(AmgXP, nRows, nBlocks, p);
+        AMGX_vector_upload(AmgXRHS, nRows, nBlocks, b);
 
         //- Solve
         AMGX_solver_solve(solver, AmgXRHS, AmgXP);
@@ -525,26 +587,42 @@ void Foam::AmgXWrapper::solve
 
         // Download data from device
         AMGX_vector_download(AmgXP, p);
+
+        if(matrix->isConsolidated()) cudaDeviceSynchronize();
     }
+    MPI_Barrier(gpuWorld_); //necessary
 
     if (matrix->isConsolidated())
     {
-        cudaMemcpy((void*) &pscalar, (void*) &p[consDispl], nLocalRows*sizeof(scalar), cudaMemcpyDefault);
+        checkCudaError(cudaMemcpy((void*) pscalar, &pCons_[consDispl], nLocalRows*sizeof(scalar), cudaMemcpyDeviceToHost),
+                       "pscalar back cudaMemcpy");
+
+        cudaDeviceSynchronize();
+        MPI_Barrier(gpuWorld_);
     }
+
+    // double* psi;
+    // psi = new double[nRows];
+    // cudaMemcpy((void*)psi, (const void*)p, sizeof(double)*nRows, cudaMemcpyDeviceToHost );
+    // std::string fileName = "pscalar" + std::to_string(Pstream::myProcNo());
+    // std::ofstream outFile4(fileName);
+    // outFile4 << "pscalar:" << nl;
+    // for(int i=0; i< nRows; ++i) outFile4 << psi[i] << nl;
+    // outFile4.close();
 }
 
 
 /* \implements AmgXWrapper::getIters */
 void Foam::AmgXWrapper::getIters(label &iter)
 {
-    AMGX_solver_get_iterations_number(solver, &iter);
+    if (gpuProc_) AMGX_solver_get_iterations_number(solver, &iter);
 }
 
 
 /* \implements AmgXWrapper::getResidual */
 void Foam::AmgXWrapper::getResidual(const label &iter, scalarField &res)
 {
-    AMGX_solver_get_iteration_residual(solver, iter, 0, res.data());
+    if (gpuProc_) AMGX_solver_get_iteration_residual(solver, iter, 0, res.data());
 }
 
 

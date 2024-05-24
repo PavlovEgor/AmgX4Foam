@@ -269,36 +269,31 @@ void Foam::csrAdressing::initializeConsolidation
     rowsConsDispPtr_ = new labelList(gpuWorldSize_ + 1, Foam::Zero);
     labelList rowsConsDispTmp(gpuWorldSize_);
     rowsConsDispTmp.data()[myGpuWorldRank_] = nLocalRows;
-    Pstream::gatherList(rowsConsDispTmp, UPstream::msgType(), gpuWorld_);
+    Pstream::allGatherList(rowsConsDispTmp, UPstream::msgType(), gpuWorld_);
 
     intFacesConsDispPtr_ = new labelList(gpuWorldSize_ + 1, Foam::Zero);
     labelList intFacesConsDispTmp(gpuWorldSize_);
     intFacesConsDispTmp.data()[myGpuWorldRank_] = nLocalIntFaces;
-    Pstream::gatherList(intFacesConsDispTmp, UPstream::msgType(), gpuWorld_);
+    Pstream::allGatherList(intFacesConsDispTmp, UPstream::msgType(), gpuWorld_);
 
     extNzConsDispPtr_ = new labelList(gpuWorldSize_ + 1, Foam::Zero);
     labelList extNzConsDispTmp(gpuWorldSize_);
     extNzConsDispTmp.data()[myGpuWorldRank_] = nLocalExtNz;
-    Pstream::gatherList(extNzConsDispTmp, UPstream::msgType(), gpuWorld_);
+    Pstream::allGatherList(extNzConsDispTmp, UPstream::msgType(), gpuWorld_);
 
     UPstream::barrier(UPstream::worldComm);
 
-    if(gpuProc_)
+    for(label i=0; i<gpuWorldSize_; ++i)
     {
-        for(label i=0; i<gpuWorldSize_; ++i)
-        {
-            rowsConsDispPtr_->data()[i+1] = rowsConsDispPtr_->cdata()[i] + rowsConsDispTmp.cdata()[i];
-            intFacesConsDispPtr_->data()[i+1] = intFacesConsDispPtr_->cdata()[i] + intFacesConsDispTmp.cdata()[i];
-            extNzConsDispPtr_->data()[i+1] = extNzConsDispPtr_->cdata()[i] + extNzConsDispTmp.cdata()[i];
-        }
-
-        nConsRows_ = rowsConsDispPtr_->last();
-        nConsIntFaces_ = intFacesConsDispPtr_->last();
-        nConsExtNz_ = extNzConsDispPtr_->last();
-        nConsTotNz = nConsRows_ + 2*nConsIntFaces_ + nConsExtNz_;
+        rowsConsDispPtr_->data()[i+1] = rowsConsDispPtr_->cdata()[i] + rowsConsDispTmp.cdata()[i];
+        intFacesConsDispPtr_->data()[i+1] = intFacesConsDispPtr_->cdata()[i] + intFacesConsDispTmp.cdata()[i];
+        extNzConsDispPtr_->data()[i+1] = extNzConsDispPtr_->cdata()[i] + extNzConsDispTmp.cdata()[i];
     }
 
-    UPstream::barrier(gpuWorld_);
+    nConsRows_ = rowsConsDispPtr_->last();
+    nConsIntFaces_ = intFacesConsDispPtr_->last();
+    nConsExtNz_ = extNzConsDispPtr_->last();
+    nConsTotNz = nConsRows_ + 2*nConsIntFaces_ + nConsExtNz_;
 
     ownLst[myGpuWorldRank_] = own;
     Pstream::gatherList(ownLst, UPstream::msgType(), gpuWorld_);
@@ -509,6 +504,8 @@ void Foam::csrAdressing::computePermutation
         nConsRows_ = nCells;
     }
 
+    fprintf(stderr, "[%ld] -> consolodation initilized\n", myGpuWorldRank_);
+
     if(gpuProc_)
     {
         ownerStartPtr_ = new labelList(nConsRows_+1, Foam::Zero);
@@ -640,11 +637,12 @@ void Foam::csrAdressing::computePermutation
     }
     
     UPstream::barrier(gpuWorld_);
+
+    fprintf(stderr, "[%ld] -> permutation completed\n", myGpuWorldRank_);
     
     if(consDiagOffGlob) delete consDiagOffGlob;
     if(consLowOffGlob) delete consLowOffGlob;
     if(consUppOffGlob) delete consUppOffGlob;
-
 }
 
 // ************************************************************************* //

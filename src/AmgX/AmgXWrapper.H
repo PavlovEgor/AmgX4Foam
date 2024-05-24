@@ -176,6 +176,7 @@ class AmgXWrapper
          */
         void solve
         (
+            const int nLocalRows,
             scalar* pscalar,
             const scalar* bscalar,
             const csrAdressing* matrix
@@ -297,9 +298,13 @@ class AmgXWrapper
 
         /** \brief AmgX solver object. */
         scalar*               pCons_ = nullptr;
+        
+        cudaIpcMemHandle_t    pConsHandle_;
 
         /** \brief AmgX solver object. */
-        scalar*      rhsCons_ = nullptr;
+        scalar*             rhsCons_ = nullptr;
+
+        cudaIpcMemHandle_t    rhsConsHandle_;
 
         /** \brief Set AmgX solver mode based on the user-provided string.
          *

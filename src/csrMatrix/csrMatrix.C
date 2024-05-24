@@ -249,61 +249,64 @@ void Foam::csrMatrix:: applyPermutation
         totNnz = nCells + 2*nIntFaces + nnzExt;
     }
 
-    if(!valuesPtr_)
+    if(gpuProc_)
     {
-        valuesPtr_ = new scalarField(totNnz);
-    }
+        if(!valuesPtr_)
+        {
+            valuesPtr_ = new scalarField(totNnz);
+        }
 
-    // Initialize valuesTmp = [(diag), (upper), (lower), (extValues)]
-    scalarField valuesTmp(totNnz);
+        // Initialize valuesTmp = [(diag), (upper), (lower), (extValues)]
+        scalarField valuesTmp(totNnz);
 
-    if(consolidationStatus_ == ConsolidationStatus::initialized)
-    {
-        for(label i=0; i<gpuWorldSize_; ++i)
+        if(consolidationStatus_ == ConsolidationStatus::initialized)
+        {
+            for(label i=0; i<gpuWorldSize_; ++i)
+            {
+                initializeValueExt
+                (
+                    nConsRows_,
+                    nConsIntFaces_,
+                    rowsConsDispPtr_->cdata()[i+1] - rowsConsDispPtr_->cdata()[i],
+                    intFacesConsDispPtr_->cdata()[i+1] - intFacesConsDispPtr_->cdata()[i],
+                    extNzConsDispPtr_->cdata()[i+1] - extNzConsDispPtr_->cdata()[i],
+                    diagLst[i].cdata(),
+                    upperLst[i].cdata(),
+                    lowerLst[i].cdata(),
+                    extValLst[i].cdata(),
+                    valuesTmp.data(),
+                    rowsConsDispPtr_->cdata()[i],
+                    intFacesConsDispPtr_->cdata()[i],
+                    extNzConsDispPtr_->cdata()[i]
+                );
+            }
+        }
+        else
         {
             initializeValueExt
             (
-                nConsRows_,
-                nConsIntFaces_,
-                rowsConsDispPtr_->cdata()[i+1] - rowsConsDispPtr_->cdata()[i],
-                intFacesConsDispPtr_->cdata()[i+1] - intFacesConsDispPtr_->cdata()[i],
-                extNzConsDispPtr_->cdata()[i+1] - extNzConsDispPtr_->cdata()[i],
-                diagLst[i].cdata(),
-                upperLst[i].cdata(),
-                lowerLst[i].cdata(),
-                extValLst[i].cdata(),
-                valuesTmp.data(),
-                rowsConsDispPtr_->cdata()[i],
-                intFacesConsDispPtr_->cdata()[i],
-                extNzConsDispPtr_->cdata()[i]
+                nCells,
+                nIntFaces,
+                nCells,
+                nIntFaces,
+                nnzExt,
+                diag.cdata(),
+                upper.cdata(),
+                lower.cdata(),
+                extVals.cdata(),
+                valuesTmp.data()
             );
         }
-    }
-    else
-    {
-        initializeValueExt
+        
+        // Apply permutation
+        applyValuePermutation
         (
-            nCells,
-            nIntFaces,
-            nCells,
-            nIntFaces,
-            nnzExt,
-            diag.cdata(),
-            upper.cdata(),
-            lower.cdata(),
-            extVals.cdata(),
-            valuesTmp.data()
+            totNnz,
+            ldu2csrPerm_->cdata(),
+            valuesTmp.cdata(),
+            valuesPtr_->data()
         );
     }
-    
-    // Apply permutation
-    applyValuePermutation
-    (
-        totNnz,
-        ldu2csrPerm_->cdata(),
-        valuesTmp.cdata(),
-        valuesPtr_->data()
-    );
 }
 
 
