@@ -60,6 +60,9 @@ public:
     Type* alloc(Foam::label size) const;
 
     template<class Type>
+    const Type* copyFromFoam(Foam::label size, const Type* hostPtr) const;
+
+    template<class Type>
     void clear(Type* ptr) const;
 
     void initializeAddressing

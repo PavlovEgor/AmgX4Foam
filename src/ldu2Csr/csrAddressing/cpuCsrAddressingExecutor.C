@@ -46,6 +46,17 @@ Type* Foam::cpuCsrAddressingExecutor::alloc
 }
 
 template<class Type>
+const Type* Foam::cpuCsrAddressingExecutor::copyFromFoam
+(
+    Foam::label size,
+	const Type* hostPtr
+) const
+{
+    const Type* ptr = hostPtr;
+	return ptr;
+}
+
+template<class Type>
 void Foam::cpuCsrAddressingExecutor::clear(Type* ptr) const
 {
     delete ptr;
@@ -106,7 +117,7 @@ void Foam::cpuCsrAddressingExecutor::initializeAddressingExt
           label * colIndTmp
 ) const
 {
-    initializeAddressing
+    this->initializeAddressing
     (
         nCells,
         nInternalFaces,
@@ -207,14 +218,19 @@ void Foam::cpuCsrAddressingExecutor::applyAddressingPermutation
 
 // * * * * * * * * * * * * * Explicit instantiations  * * * * * * * * * * * //
 
-#define makecpuCsrAddressingExecutor(Type)                              \
-    template Type* Foam::cpuCsrAddressingExecutor::alloc<Type>          \
-    (                                                                   \
+#define makecpuCsrAddressingExecutor(Type)                                    \
+    template Type* Foam::cpuCsrAddressingExecutor::alloc<Type>                \
+    (                                                                         \
         Foam::label size                                                      \
-    ) const;                                                            \
-    template void  Foam::cpuCsrAddressingExecutor::clear<Type>          \
-    (                                                                   \
-        Type* ptr                                                       \
+    ) const;                                                                  \
+    template const Type* Foam::cpuCsrAddressingExecutor::copyFromFoam<Type>   \
+    (                                                                         \
+        Foam::label size,                                                     \
+        const Type* hostPtr                                                   \
+    ) const;                                                                  \
+    template void  Foam::cpuCsrAddressingExecutor::clear<Type>                \
+    (                                                                         \
+        Type* ptr                                                             \
     ) const;
 
 makecpuCsrAddressingExecutor(Foam::label)
