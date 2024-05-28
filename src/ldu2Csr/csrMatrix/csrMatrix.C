@@ -34,9 +34,9 @@ License
 
 // * * * * * * * * * * * * * * * Constructors * * * * * * * * * * * * * * * //
 
-Foam::csrMatrix::csrMatrix()
+Foam::csrMatrix::csrMatrix(word mode)
 :
-    csrAddressing(),
+    csrAddressing(mode),
     valuesPtr_(nullptr)
 {}
 
