@@ -29,28 +29,28 @@ License
 
 // ************************************************************************* //
 
-#include "csrMatrix.C"
+#include "cpuCsrMatrixExecutor.H"
 #include <cmath>
 #include <bits/stdc++.h>
 
-// * * * * * * * * * * * * * * * * CPU Kernels  * * * * * * * * * * * * * * //
+// * * * * * * * * * * * * * * * * Member functions * * * * * * * * * * * * * //
 
-inline void Foam::csrMatrix::initializeValue
+void Foam::cpuCsrMatrixExecutor::initializeValue
 (
-    const int   nCells,
-    const int   nIntFaces,
-    const double * const diag,
-    const double * const upper,
-    const double * const lower,
-          double * valuesTmp
-)
+    const label   nCells,
+    const label   nIntFaces,
+    const scalar * const diag,
+    const scalar * const upper,
+    const scalar * const lower,
+          scalar * valuesTmp
+) const
 {
-    for(int i=0; i<nCells; ++i)
+    for(label i=0; i<nCells; ++i)
     {
         valuesTmp[i] = diag[i];
     }
 
-    for(int i=0; i<nIntFaces; ++i)
+    for(label i=0; i<nIntFaces; ++i)
     {
         valuesTmp[nCells + i] = upper[i];
         valuesTmp[nCells + nIntFaces + i] = lower[i];
@@ -58,17 +58,17 @@ inline void Foam::csrMatrix::initializeValue
 }
 
 
-inline void Foam::csrMatrix::initializeValueExt
+void Foam::cpuCsrMatrixExecutor::initializeValueExt
 (
-    const int   nCells,
-    const int   nIntFaces,
-    const int   nnzExt,
-    const double * const diag,
-    const double * const upper,
-    const double * const lower,
-    const double * const extValue,
-          double * valuesTmp
-)
+    const label   nCells,
+    const label   nIntFaces,
+    const label   nnzExt,
+    const scalar * const diag,
+    const scalar * const upper,
+    const scalar * const lower,
+    const scalar * const extValue,
+          scalar * valuesTmp
+) const
 {
     // Initialize valuesTmp = [(diag), (upper), (lower), (extValues)]
 
@@ -82,21 +82,21 @@ inline void Foam::csrMatrix::initializeValueExt
         valuesTmp
     );
 
-    for(int i=0; i<nnzExt; ++i)
+    for(label i=0; i<nnzExt; ++i)
     {
         valuesTmp[nCells + 2*nIntFaces + i] = extValue[i];
     }
 }
 
-inline void Foam::csrMatrix::applyValuePermutation
+void Foam::cpuCsrMatrixExecutor::applyValuePermutation
 (
-    const int   totNnz,
-    const int * const ldu2csr,
-    const double * const valuesTmp,
-          double * values
-)
+    const label   totNnz,
+    const label * const ldu2csr,
+    const scalar * const valuesTmp,
+          scalar * values
+) const
 {
-    for(int i=0; i<totNnz; ++i)
+    for(label i=0; i<totNnz; ++i)
     {
         values[i] = valuesTmp[ldu2csr[i]];
     }

@@ -30,7 +30,11 @@ License
 
 // * * * * * * * * * * * * * * Static Data Members * * * * * * * * * * * * * //
 
-
+#ifdef have_cuda
+Foam::csrMatrixExecutor Foam::csrMatrix::csrMatExec_ = cudaCsrMatrixExecutor();
+#else
+Foam::csrMatrixExecutor Foam::csrMatrix::csrMatExec_ = cpuCsrMatrixExecutor();
+#endif
 
 // * * * * * * * * * * * * * * * Constructors * * * * * * * * * * * * * * * //
 
@@ -80,12 +84,13 @@ void Foam::csrMatrix::finalize()
 {
     if (valuesPtr_)
     {
-        delete valuesPtr_;
+        // delete valuesPtr_;
+        std::visit([this](const auto& exec){exec.template clear<scalar>(this->valuesPtr_); }, csrAddrExec_);
     }
 }
 
 
-const Foam::scalarField& Foam::csrMatrix::values() const
+const Foam::scalar* Foam::csrMatrix::values() const
 {
     if (!valuesPtr_)
     {
@@ -94,7 +99,7 @@ const Foam::scalarField& Foam::csrMatrix::values() const
             << abort(FatalError);
     }
 
-    return *valuesPtr_;
+    return valuesPtr_;
 }
 
 
@@ -119,11 +124,18 @@ void Foam::csrMatrix::applyPermutation(const lduMatrix& lduMatrix)
 
     if(!valuesPtr_)
     {
-        valuesPtr_ = new scalarField(totNnz);
+        // valuesPtr_ = new scalarField(totNnz);
+        std::visit([this, totNnz](const auto& exec)
+               { this->valuesPtr_ = exec.template alloc<scalar>(totNnz); },
+               csrAddrExec_);
     }
 
     // Initialize valuesTmp = [(diag), (upper), (lower)]
-    scalarField valuesTmp(totNnz);
+    // scalarField valuesTmp(totNnz);
+    scalar* valuesTmp = nullptr;
+    std::visit([&valuesTmp, totNnz](const auto& exec)
+               { valuesTmp = exec.template alloc<scalar>(totNnz); },
+               csrAddrExec_);
 
     initializeValue
     (
@@ -132,7 +144,7 @@ void Foam::csrMatrix::applyPermutation(const lduMatrix& lduMatrix)
         diag.cdata(),
         upper.cdata(),
         lower.cdata(),
-        valuesTmp.data()
+        valuesTmp
     );
 
     // Apply permutation
@@ -140,9 +152,13 @@ void Foam::csrMatrix::applyPermutation(const lduMatrix& lduMatrix)
     (
         totNnz,
         ldu2csrPerm_,
-        valuesTmp.cdata(),
-        valuesPtr_->data()
+        valuesTmp,
+        valuesPtr_
     );
+
+    std::visit([valuesTmp](const auto& exec)
+               {exec.template clear<scalar>(valuesTmp); },
+               csrAddrExec_);
 }
 
 
@@ -207,11 +223,18 @@ void Foam::csrMatrix:: applyPermutation
 
     if(!valuesPtr_)
     {
-        valuesPtr_ = new scalarField(totNnz);
+        // valuesPtr_ = new scalarField(totNnz);
+        std::visit([this, totNnz](const auto& exec)
+               { this->valuesPtr_ = exec.template alloc<scalar>(totNnz); },
+               csrAddrExec_);
     }
 
     // Initialize valuesTmp = [(diag), (upper), (lower), (extValues)]
-    scalarField valuesTmp(totNnz);
+    // scalarField valuesTmp(totNnz);
+    scalar* valuesTmp = nullptr;
+    std::visit([&valuesTmp, totNnz](const auto& exec)
+               { valuesTmp = exec.template alloc<scalar>(totNnz); },
+               csrAddrExec_);
 
     initializeValueExt
     (
@@ -222,7 +245,7 @@ void Foam::csrMatrix:: applyPermutation
         upper.cdata(),
         lower.cdata(),
         extVals.cdata(),
-        valuesTmp.data()
+        valuesTmp
     );
 
     // Apply permutation
@@ -230,9 +253,13 @@ void Foam::csrMatrix:: applyPermutation
     (
         totNnz,
         ldu2csrPerm_,
-        valuesTmp.cdata(),
-        valuesPtr_->data()
+        valuesTmp,
+        valuesPtr_
     );
+
+    std::visit([valuesTmp](const auto& exec)
+               {exec.template clear<scalar>(valuesTmp); },
+               csrAddrExec_);
 }
 
 

@@ -44,6 +44,7 @@ SourceFiles
 #include "scalar.H"
 #include "lduMatrix.H"
 #include "csrAddressing.H"
+#include "csrMatrixExecutor.H"
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
@@ -64,40 +65,43 @@ class csrMatrix
 {
     // Private Data
 
+        //- Data executor
+        static csrMatrixExecutor csrMatExec_;
+
         //- Coefficients
-        scalarField *valuesPtr_;
+        scalar *valuesPtr_;
 
 
     // Private methods
            
         void initializeValue
         (
-            const int   nCells,
-            const int   nIntFaces,
-            const double * const diag,
-            const double * const upper,
-            const double * const lower,
-                  double * valuesTmp                  
+            const label   nCells,
+            const label   nIntFaces,
+            const scalar * const diag,
+            const scalar * const upper,
+            const scalar * const lower,
+                  scalar * valuesTmp                  
         );
 
         void initializeValueExt
         (
-            const int      nCells,
-            const int      nIntFaces,
-            const int      nnzExt,
-            const double * const diag,
-            const double * const upper,
-            const double * const lower,
-            const double * const extValue,
-                  double * valuesTmp
+            const label      nCells,
+            const label      nIntFaces,
+            const label      nnzExt,
+            const scalar * const diag,
+            const scalar * const upper,
+            const scalar * const lower,
+            const scalar * const extValue,
+                  scalar * valuesTmp
         );
 
         void applyValuePermutation
         (
-            const int      totNnz,
-            const int    * const ldu2csr,
-            const double * const valuesTmp,
-                  double * values
+            const label totNnz,
+            const label  * const ldu2csr,
+            const scalar * const valuesTmp,
+                  scalar * values
         );
 
 public:
@@ -133,7 +137,7 @@ public:
     //- Member Functions
 
         //- Access to coefficients
-            virtual const scalarField& values() const;
+            virtual const scalar* values() const;
 
             bool hasValues() const noexcept
             {

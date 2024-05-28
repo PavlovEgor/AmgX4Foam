@@ -289,13 +289,13 @@ void Foam::AmgXWrapper::setOperator
         cudaMalloc((void**) &matValues, sizeof(double)*nLocalNz);
         cudaMemcpy((void*) ownStart, (const void*) matrix->ownerStart(), sizeof(label)*(nLocalRows+1), cudaMemcpyHostToDevice);
         cudaMemcpy((void*) colInd, (const void*) matrix->colIndices(), sizeof(label)*nLocalNz, cudaMemcpyHostToDevice);
-        cudaMemcpy((void*) matValues, (const void*) matrix->values().cdata(), sizeof(double)*nLocalNz, cudaMemcpyHostToDevice);
+        cudaMemcpy((void*) matValues, (const void*) matrix->values(), sizeof(double)*nLocalNz, cudaMemcpyHostToDevice);
     }
     else
     {
         ownStart = matrix->ownerStart();
         colInd = matrix->colIndices();
-        matValues = matrix->values().cdata();
+        matValues = matrix->values();
     }
     //- upload matrix A to AmgX
     if (!Pstream::parRun())
@@ -352,7 +352,7 @@ void Foam::AmgXWrapper::updateOperator
 {
     const label nLocalRows = matrix->nOwnerStart() - 1;
     const label nLocalNz = matrix->nLocalNz();
-    const void * matValues = matrix->values().cdata();
+    const void * matValues = matrix->values();
 
     //- Replace the coefficients for the CSR matrix A within AmgX
     AMGX_matrix_replace_coefficients(AmgXA, nLocalRows, nLocalNz, matValues, nullptr);

@@ -124,7 +124,7 @@ Foam::solverPerformance Foam::AmgXSolver::solve
         Amat.applyPermutation(matrix_, interfaceBouCoeffs_, nGlobalCells);
     }
 
-    label nnz = Amat.values().size();
+    // label nnz = Amat.nLocalNz();
 
     //- Print matrix converted to check
     /*string fileName = "ownStart-cpu" + std::to_string(Pstream::myProcNo());

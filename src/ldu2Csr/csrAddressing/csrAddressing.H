@@ -68,10 +68,10 @@ class csrAddressing
 
     // Private methods
 
-    static csrAddressingExecutor csrAddrExec_;
-
 protected:
     //- Protected Data
+
+        static csrAddressingExecutor csrAddrExec_;
 
         //- Number of blocks
         label nBlocks_ = 1;
@@ -236,7 +236,7 @@ public:
             }
 
         //- Access to coefficients
-            virtual const scalarField& values() const = 0;
+            virtual const scalar * values() const = 0;
 
 
         //- Operations
