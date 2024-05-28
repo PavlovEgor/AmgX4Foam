@@ -32,11 +32,7 @@ License
 
 // * * * * * * * * * * * * * * Static Data Members * * * * * * * * * * * * * //
 
-#ifdef have_cuda
 Foam::csrAddressingExecutor Foam::csrAddressing::csrAddrExec_ = cudaCsrAddressingExecutor();
-#else
-Foam::csrAddressingExecutor Foam::csrAddressing::csrAddrExec_ = cpuCsrAddressingExecutor();
-#endif
 
 // * * * * * * * * * * * * * * * Constructors * * * * * * * * * * * * * * * //
 
@@ -161,11 +157,25 @@ void Foam::csrAddressing::clearAddressing()
 //- Find permutation array and new addressing vectors (no interface)
 void Foam::csrAddressing::computePermutation(const lduAddressing * addr)
 {
-    const labelList& own = addr->lowerAddr();
-    const labelList& neigh = addr->upperAddr();
+	const label* own = nullptr;
+	const label* neigh = nullptr;
+
+	const label* hostOwn = addr->lowerAddr().cdata();
+	label ownSize = addr->lowerAddr().size();
+	const label* hostNeigh = addr->upperAddr().cdata();
+	label neighSize = addr->upperAddr().size();
+
+	std::visit([&hostOwn, &own, ownSize](const auto& exec)
+               { own = exec.template copyFromFoam<label>(ownSize,hostOwn); },
+               csrAddrExec_);
+	std::visit([&hostNeigh, &neigh, neighSize](const auto& exec)
+               { neigh = exec.template copyFromFoam<label>(neighSize,hostNeigh); },
+               csrAddrExec_);
+    //const labelList& own = addr->lowerAddr();
+    //const labelList& neigh = addr->upperAddr();
     
     const label nCells = addr->size();
-    const label nIntFaces = own.size();
+    const label nIntFaces = ownSize;
     const label totNnz = nCells + 2*nIntFaces;
 
     nOwnerStart_ = nCells+1;
@@ -213,8 +223,8 @@ void Foam::csrAddressing::computePermutation(const lduAddressing * addr)
         nCells,
         nIntFaces,
         totNnz,
-        own.cdata(),
-        neigh.cdata(),
+        own,
+        neigh,
         tmpPerm,
         rowindicesTmp,
         colindicesTmp
@@ -249,6 +259,10 @@ void Foam::csrAddressing::computePermutation(const lduAddressing * addr)
                {exec.template clear<label>(rowindicesTmp); }, csrAddrExec_);
     std::visit([colindicesTmp](const auto& exec)
                {exec.template clear<label>(colindicesTmp); }, csrAddrExec_);
+    std::visit([own](const auto& exec)
+               {exec.template clear<label>(own); }, csrAddrExec_);
+    std::visit([neigh](const auto& exec)
+               {exec.template clear<label>(neigh); }, csrAddrExec_);
 }
 
 
@@ -260,11 +274,26 @@ void Foam::csrAddressing::computePermutation
           label& nnzExt
 )
 {
-    const labelList& own = addr.lowerAddr();
-    const labelList& neigh = addr.upperAddr();
+//    const labelList& own = addr.lowerAddr();
+//    const labelList& neigh = addr.upperAddr();
 
-    const label nCells = addr.size();
-    const label nIntFaces = own.size();
+	const label* own = nullptr;
+	const label* neigh = nullptr;
+
+	const label* hostOwn = addr.lowerAddr().cdata();
+	label ownSize = addr.lowerAddr().size();
+	const label* hostNeigh = addr.upperAddr().cdata();
+	label neighSize = addr.upperAddr().size();
+
+	std::visit([&hostOwn, &own, ownSize](const auto& exec)
+               { own = exec.template copyFromFoam<label>(ownSize,hostOwn); },
+               csrAddrExec_);
+	std::visit([&hostNeigh, &neigh, neighSize](const auto& exec)
+               { neigh = exec.template copyFromFoam<label>(neighSize,hostNeigh); },
+               csrAddrExec_);
+
+	const label nCells = addr.size();
+    const label nIntFaces = ownSize;
 
     const globalIndex globalNumbering(nCells);
 
@@ -309,6 +338,7 @@ void Foam::csrAddressing::computePermutation
     labelField extRows(nnzExt, Foam::Zero);
     labelField extCols(nnzExt, Foam::Zero);
 
+
     nnzExt = 0;
     
     forAll(interfaces, patchi)
@@ -342,6 +372,17 @@ void Foam::csrAddressing::computePermutation
             nnzExt += len;
         }
     }
+
+    const label* extDevRows = nullptr;
+    const label* extDevCols = nullptr;
+    const label* extRowsPtr = extRows.cdata();
+    const label* extColsPtr = extCols.cdata();
+	std::visit([&extRowsPtr, &extDevRows, nnzExt](const auto& exec)
+               { extDevRows = exec.template copyFromFoam<label>(nnzExt,extRowsPtr); },
+               csrAddrExec_);
+	std::visit([&extColsPtr, &extDevCols, nnzExt](const auto& exec)
+               { extDevCols = exec.template copyFromFoam<label>(nnzExt,extColsPtr); },
+               csrAddrExec_);
 
     const label totNnz = nCells + 2*nIntFaces + nnzExt;
 
@@ -396,10 +437,10 @@ void Foam::csrAddressing::computePermutation
         nIntFaces,
         nnzExt,
         totNnz,
-        own.cdata(),
-        neigh.cdata(),
-        extRows.cdata(),
-        extCols.cdata(),
+        own,
+        neigh,
+        extDevRows,
+        extDevCols,
         tmpPerm,
         rowindicesTmp,
         colindicesTmp
@@ -437,6 +478,22 @@ void Foam::csrAddressing::computePermutation
         colIndicesPtr_,
         ownerStartPtr_
     );
+    std::visit([rowIndices](const auto& exec)
+               {exec.template clear<label>(rowIndices); }, csrAddrExec_);
+    std::visit([tmpPerm](const auto& exec)
+               {exec.template clear<label>(tmpPerm); }, csrAddrExec_);
+    std::visit([rowindicesTmp](const auto& exec)
+               {exec.template clear<label>(rowindicesTmp); }, csrAddrExec_);
+    std::visit([colindicesTmp](const auto& exec)
+               {exec.template clear<label>(colindicesTmp); }, csrAddrExec_);
+    std::visit([own](const auto& exec)
+               {exec.template clear<label>(own); }, csrAddrExec_);
+    std::visit([neigh](const auto& exec)
+               {exec.template clear<label>(neigh); }, csrAddrExec_);
+    std::visit([extDevRows](const auto& exec)
+               {exec.template clear<label>(extDevRows); }, csrAddrExec_);
+    std::visit([extDevCols](const auto& exec)
+               {exec.template clear<label>(extDevCols); }, csrAddrExec_);
 }
 
 // ************************************************************************* //
