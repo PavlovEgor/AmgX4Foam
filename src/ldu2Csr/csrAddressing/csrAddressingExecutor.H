@@ -39,11 +39,9 @@ SourceFiles
 #ifndef csrAddressing_Executor_H
 #define csrAddressing_Executor_H
 
-#ifdef have_cuda
-#include "cudaCsrAddressingExecutor.H"
-#else
 #include "cpuCsrAddressingExecutor.H"
-#endif
+#include "cudaCsrAddressingExecutor.H"
+
 #include <variant>
 
 namespace Foam
@@ -51,11 +49,7 @@ namespace Foam
 
 using csrAddressingExecutor = std::variant
     <
-#ifdef have_cuda
     cudaCsrAddressingExecutor
-#else
-    cpuCsrAddressingExecutor
-#endif
     >;
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //

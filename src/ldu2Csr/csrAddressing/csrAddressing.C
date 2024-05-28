@@ -32,11 +32,7 @@ License
 
 // * * * * * * * * * * * * * * Static Data Members * * * * * * * * * * * * * //
 
-#ifdef have_cuda
 Foam::csrAddressingExecutor Foam::csrAddressing::csrAddrExec_ = cudaCsrAddressingExecutor();
-#else
-Foam::csrAddressingExecutor Foam::csrAddressing::csrAddrExec_ = cpuCsrAddressingExecutor();
-#endif
 
 // * * * * * * * * * * * * * * * Constructors * * * * * * * * * * * * * * * //
 
@@ -263,6 +259,10 @@ void Foam::csrAddressing::computePermutation(const lduAddressing * addr)
                {exec.template clear<label>(rowindicesTmp); }, csrAddrExec_);
     std::visit([colindicesTmp](const auto& exec)
                {exec.template clear<label>(colindicesTmp); }, csrAddrExec_);
+    std::visit([own](const auto& exec)
+               {exec.template clear<label>(own); }, csrAddrExec_);
+    std::visit([neigh](const auto& exec)
+               {exec.template clear<label>(neigh); }, csrAddrExec_);
 }
 
 
@@ -478,6 +478,22 @@ void Foam::csrAddressing::computePermutation
         colIndicesPtr_,
         ownerStartPtr_
     );
+    std::visit([rowIndices](const auto& exec)
+               {exec.template clear<label>(rowIndices); }, csrAddrExec_);
+    std::visit([tmpPerm](const auto& exec)
+               {exec.template clear<label>(tmpPerm); }, csrAddrExec_);
+    std::visit([rowindicesTmp](const auto& exec)
+               {exec.template clear<label>(rowindicesTmp); }, csrAddrExec_);
+    std::visit([colindicesTmp](const auto& exec)
+               {exec.template clear<label>(colindicesTmp); }, csrAddrExec_);
+    std::visit([own](const auto& exec)
+               {exec.template clear<label>(own); }, csrAddrExec_);
+    std::visit([neigh](const auto& exec)
+               {exec.template clear<label>(neigh); }, csrAddrExec_);
+    std::visit([extDevRows](const auto& exec)
+               {exec.template clear<label>(extDevRows); }, csrAddrExec_);
+    std::visit([extDevCols](const auto& exec)
+               {exec.template clear<label>(extDevCols); }, csrAddrExec_);
 }
 
 // ************************************************************************* //

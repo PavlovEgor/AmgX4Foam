@@ -29,74 +29,222 @@ License
 
 #include "cudaCsrAddressingExecutor.H"
 
+#include "label.H"
 #include "csrAddressing.H"
 #include "global.cuh"
+#include <cub/cub.cuh>
 
 // * * * * * * * * * * * * * * * * CUDA Kernels  * * * * * * * * * * * * * * //
 
-//__global__
-//void cudaComputeNormFactor
-//(
-//    const int size,
-//    const double * const Apsi,
-//    const double * const avgPsiSumA,
-//    const double * const source,
-//    double * const normFactor
-//)
-//{
-//    __shared__ double temp[NUM_THREADS_PER_BLOCK];
-//    int celli    = blockIdx.x * blockDim.x + threadIdx.x;
-//    int celliLoc = threadIdx.x;
-//    temp[celliLoc] = 0.0;
-//    if (celli < size)
-//    {
-//        temp[celliLoc] =  std::abs(Apsi[celli]   - avgPsiSumA[celli]) +
-//                          std::abs(source[celli] - avgPsiSumA[celli]);
-//
-//        __syncthreads();
-//
-//        if (celliLoc == 0)
-//        {
-//            double sum = 0;
-//            for (int iThread = 0; iThread < NUM_THREADS_PER_BLOCK; ++iThread)
-//            {
-//                sum += temp[iThread];
-//            }
-//            atomicAdd(normFactor, sum);
-//        }
-//    }
-//}
-//
-//template<int nComps>
-//__global__
-//void cudaComputeH
-//(
-//    const int nInternalFaces,
-//    const int* const uPtr,
-//    const int* const lPtr,
-//    const double* const lowerPtr,
-//    const double* const upperPtr,
-//    const double* const psiPtr,
-//          double* const HpsiPtr
-//)
-//{
-//    int facei = blockIdx.x * blockDim.x + threadIdx.x;
-//    if (facei < nInternalFaces)
-//    {
-//        for (int cmpt = 0; cmpt < nComps; ++cmpt)
-//        {
-//            atomicAdd(&HpsiPtr[cmpt + nComps*uPtr[facei]], -lowerPtr[facei]*psiPtr[cmpt + nComps*lPtr[facei]]);
-//            atomicAdd(&HpsiPtr[cmpt + nComps*lPtr[facei]], -upperPtr[facei]*psiPtr[cmpt + nComps*uPtr[facei]]);
-//        }
-//    }
-//}
+__global__
+void cudaInitializeSequence
+(
+    const int   totNnz,
+          int * tmpPerm
+)
+{
+    int iNnz = blockIdx.x * blockDim.x + threadIdx.x;
+
+    // Initialize tmpPerm = [0, 1, ... totNnz-1]
+    if(iNnz < totNnz)
+    {
+        tmpPerm[iNnz] = iNnz;
+    }
+}
+
+__global__
+void cudaInitializeSequencePair
+(
+    const int   nnz,
+          int * rowInd,
+          int * colInd
+)
+{
+    int iNnz = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if(iNnz < nnz)
+    {
+        rowInd[iNnz] = iNnz;
+        colInd[iNnz] = iNnz;
+    }
+}
+
+__global__
+void cudaInitializeAddr
+(
+    const int   nCells,
+    const int   nInternalFaces,
+    const int * const owner,
+    const int * const neighbour,
+          int * rowIndTmp,
+          int * colIndTmp
+)
+{
+    int iNnz = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if(iNnz < nInternalFaces)
+    {
+        rowIndTmp[nCells + iNnz] = owner[iNnz];
+        colIndTmp[nCells + iNnz] = neighbour[iNnz];
+
+        rowIndTmp[nCells + nInternalFaces + iNnz] = neighbour[iNnz];
+        colIndTmp[nCells + nInternalFaces + iNnz] = owner[iNnz];
+    }
+}
+
+
+__global__
+void cudaInitializeAddrExt
+(
+    const int   nCells,
+    const int   nInternalFaces,
+    const int   nnzExt,
+    const int * const extRows,
+    const int * const extCols,
+          int * rowIndTmp,
+          int * colIndTmp
+)
+{
+    int iNnz = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if(iNnz < nnzExt)
+    {
+        rowIndTmp[nCells + 2*nInternalFaces + iNnz] = extRows[iNnz];
+        colIndTmp[nCells + 2*nInternalFaces + iNnz] = extCols[iNnz];
+    }
+}
+
+
+__global__
+void cudaLocToGlobD
+(
+    const int   nRows,
+    const int   diagIndexGlobal,
+          int * colIndicesGlobal
+)
+{
+    int iNnz = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if(iNnz < nRows)
+    {
+        colIndicesGlobal[iNnz] += diagIndexGlobal;
+    }
+}
+
+
+__global__
+void cudaLocToGlobON
+(
+    const int   nRows,
+    const int   nIntFaces,
+    const int   lowOffGlobal,
+    const int   uppOffGlobal,
+          int * colIndicesGlobal
+)
+{
+    int iNnz = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if(iNnz < nIntFaces)
+    {
+        colIndicesGlobal[nRows + iNnz] += uppOffGlobal;
+        colIndicesGlobal[nRows + nIntFaces + iNnz] += lowOffGlobal;
+    }
+}
+
+
+__global__
+void cudaComputeNNZ
+(
+    const int   totNnz,
+    const int * const rowInd,
+          int * nnz
+)
+{
+    int iNnz = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if(iNnz<totNnz)
+    {
+        atomicAdd(&nnz[rowInd[iNnz]], 1);
+    }
+}
+
+template<typename T>
+__global__
+void cudaApplyPermutation
+(
+    const int   length,
+    const int * const permArray,
+    const T   * const srcArray,
+          T   *       dstArray
+)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if(i < length)
+    {
+        dstArray[i] = srcArray[permArray[i]];
+    }
+}
+
+__global__
+void cudaInitializeValueD
+(
+    const int   nCells,
+    const double * const diag,
+          double * valuesTmp
+)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if(i < nCells)
+    {
+        valuesTmp[i] = diag[i];
+    }
+}
+
+__global__
+void cudaInitializeValueUL
+(
+    const int   nCells,
+    const int   nIntFaces,
+    const double * const upper,
+    const double * const lower,
+          double * valuesTmp
+)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if(i < nIntFaces)
+    {
+        valuesTmp[nCells + i] = upper[i];
+        valuesTmp[nCells + nIntFaces + i] = lower[i];
+    }
+}
+
+__global__
+void cudaInitializeValueExt
+(
+    const int   nCells,
+    const int   nIntFaces,
+    const int   nnzExt,
+    const double * const extValues,
+          double * valuesTmp
+)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if(i < nnzExt)
+    {
+        valuesTmp[nCells + 2*nIntFaces + i] = extValues[i];
+    }
+}
 
 // * * * * * * * * * * * * Public Member Functions * * * * * * * * * * * * * //
 
 template<class Type>
 Type* Foam::cudaCsrAddressingExecutor::alloc
 (
-    int size
+    Foam::label size
 ) const
 {
     void* ptr;
@@ -109,6 +257,29 @@ Type* Foam::cudaCsrAddressingExecutor::alloc
 }
 
 template<class Type>
+const Type* Foam::cudaCsrAddressingExecutor::copyFromFoam
+(
+    Foam::label size,
+	const Type* hostPtr
+) const
+{
+	void* ptr;
+    label err = CHECK_CUDA_ERROR(cudaMalloc((void**)&ptr, (size_t) size*sizeof(Type)));
+    if (err != 0)
+    {
+        FatalErrorInFunction << "ERROR: cudaMalloc returned " << err << abort(FatalError);
+    }
+
+    err = CHECK_CUDA_ERROR(cudaMemcpy(ptr, hostPtr, (size_t) size*sizeof(Type), cudaMemcpyHostToDevice));
+    if (err != 0)
+    {
+        FatalErrorInFunction << "ERROR: cudaMemcpy returned " << err << abort(FatalError);
+    }
+
+    return static_cast<const Type*>(ptr);
+}
+
+template<class Type>
 void Foam::cudaCsrAddressingExecutor::clear(Type* ptr) const
 {
     if (ptr)
@@ -116,20 +287,255 @@ void Foam::cudaCsrAddressingExecutor::clear(Type* ptr) const
         int err = CHECK_CUDA_ERROR(cudaFree(ptr));
     }
 }
+
+template<class Type>
+void Foam::cudaCsrAddressingExecutor::clear(const Type* ptr) const
+{
+    if (ptr)
+    {
+        int err = CHECK_CUDA_ERROR(cudaFree((Type*) ptr));
+    }
+}
+
+
+void Foam::cudaCsrAddressingExecutor::initializeAddressing
+(
+    const Foam::label   nCells,
+    const Foam::label   nInternalFaces,
+    const Foam::label   totNnz,
+    const Foam::label * const owner,
+    const Foam::label * const neighbour,
+          Foam::label * tmpPerm,
+          Foam::label * rowIndTmp,
+          Foam::label * colIndTmp
+) const
+{
+    // Initialize tmpPerm = [0, 1, ... totNnz-1]
+    label numBlocks = (totNnz + NUM_THREADS_PER_BLOCK - 1) / NUM_THREADS_PER_BLOCK;
+    cudaInitializeSequence<<<numBlocks, NUM_THREADS_PER_BLOCK>>>
+    (
+        totNnz,
+        tmpPerm
+    );
+
+    // Initialize: rowindicesTmp = [0, ... nCells-1, (owner), (neighbour)]
+    //             colindicesTmp = [0, ... nCells-1, (neighbour), (owner)]
+    if(nCells > 0)
+    {
+        numBlocks = nCells / NUM_THREADS_PER_BLOCK + 1;
+        cudaInitializeSequencePair<<<numBlocks, NUM_THREADS_PER_BLOCK>>>
+        (
+            nCells,
+            rowIndTmp,
+            colIndTmp
+        );
+    }
+
+    numBlocks = (nInternalFaces + NUM_THREADS_PER_BLOCK - 1) / NUM_THREADS_PER_BLOCK;
+    cudaInitializeAddr<<<numBlocks, NUM_THREADS_PER_BLOCK>>>
+    (
+        nCells,
+        nInternalFaces,
+        owner,
+        neighbour,
+        rowIndTmp,
+        colIndTmp
+    );
+
+    cudaDeviceSynchronize();
+
+    CHECK_LAST_CUDA_ERROR();
+    return;
+}
+
+void Foam::cudaCsrAddressingExecutor::initializeAddressingExt
+(
+    const label   nCells,
+    const label   nInternalFaces,
+    const label   nnzExt,
+    const label   totNnz,
+    const label * const owner,
+    const label * const neighbour,
+    const label * const extRows,
+    const label * const extCols,
+          label * tmpPerm,
+          label * rowIndTmp,
+          label * colIndTmp
+) const
+{
+    this->initializeAddressing
+    (
+        nCells,
+        nInternalFaces,
+        totNnz,
+        owner,
+        neighbour,
+        tmpPerm,
+        rowIndTmp,
+        colIndTmp
+    );
+
+    label numBlocks = (nnzExt + NUM_THREADS_PER_BLOCK - 1) / NUM_THREADS_PER_BLOCK;
+    cudaInitializeAddrExt<<<numBlocks, NUM_THREADS_PER_BLOCK>>>
+    (
+        nCells,
+        nInternalFaces,
+        nnzExt,
+        extRows,
+        extCols,
+        rowIndTmp,
+        colIndTmp
+    );
+
+    cudaDeviceSynchronize();
+
+    CHECK_LAST_CUDA_ERROR();
+    return;
+}
+
+void Foam::cudaCsrAddressingExecutor::computeSorting
+(
+    const label   totNnz,
+          label * tmpPerm,
+          label * rowIndTmp,
+          label * rowInd,
+          label * ldu2csr
+) const
+{
+    cub::DoubleBuffer<label> d_keys(rowIndTmp, rowInd);
+    cub::DoubleBuffer<label> d_values(tmpPerm, ldu2csr);
+
+    // Determine temporary device storage requirements for sort pairs
+    void * tempStorage = NULL;
+    size_t tempStorageBytes = 0;
+    cub::DeviceRadixSort::SortPairs(tempStorage, tempStorageBytes, d_keys, d_values, totNnz);
+    // Allocate temporary storage for exclusive sort pairs
+    cudaMalloc(&tempStorage, tempStorageBytes);
+    // Run radix sort pairs
+    cub::DeviceRadixSort::SortPairs(tempStorage, tempStorageBytes, d_keys, d_values, totNnz);
+
+    rowInd = d_keys.Current();
+    ldu2csr = d_values.Current();
+
+    cudaFree(tempStorage);
+
+    CHECK_LAST_CUDA_ERROR();
+    return;
+}
+
+void Foam::cudaCsrAddressingExecutor::localToGlobalColIndices
+(
+    const label nRows,
+    const label nIntFaces,
+    const label diagIndexGlobal,
+    const label lowOffGlobal,
+    const label uppOffGlobal,
+    label *colIndicesGlobal
+) const
+{
+    label numBlocks;
+
+    if(nRows > 0)
+    {
+        numBlocks = (nRows + NUM_THREADS_PER_BLOCK - 1) / NUM_THREADS_PER_BLOCK;
+        cudaLocToGlobD<<<numBlocks, NUM_THREADS_PER_BLOCK>>>
+        (
+            nRows,
+            diagIndexGlobal,
+            colIndicesGlobal
+        );
+    }
+
+    numBlocks = (nIntFaces + NUM_THREADS_PER_BLOCK - 1) / NUM_THREADS_PER_BLOCK;
+    cudaLocToGlobON<<<numBlocks, NUM_THREADS_PER_BLOCK>>>
+    (
+        nRows,
+        nIntFaces,
+        lowOffGlobal,
+        uppOffGlobal,
+        colIndicesGlobal
+    );
+
+    cudaDeviceSynchronize();
+    CHECK_LAST_CUDA_ERROR();
+
+    return;
+}
+
+void Foam::cudaCsrAddressingExecutor::applyAddressingPermutation
+(
+    const label   nCells, //NOTE: it is not used but is need for the cuda kernel
+    const label   totNnz,
+    const label * const ldu2csr,
+    const label * const colIndTmp,
+    const label * const rowInd,
+          label * colInd,
+          label * ownStart
+) const
+{
+    //Foam::deviceField<Foam::label> nnz(nCells + 1, Foam::Zero);
+    label * nnz;
+    cudaMalloc((void **)&nnz, (nCells + 1)*sizeof(label));
+    cudaMemset((void **)&nnz, 0, (nCells + 1)*sizeof(label));
+
+    label numBlocks = (totNnz + NUM_THREADS_PER_BLOCK - 1) / NUM_THREADS_PER_BLOCK;
+    cudaComputeNNZ<<<numBlocks, NUM_THREADS_PER_BLOCK>>>
+    (
+        totNnz,
+        rowInd,
+        nnz
+    );
+    cudaDeviceSynchronize();
+
+    // Determine temporary device storage requirements for exclusive prefix scan
+    void     *d_temp_storage = NULL;
+    size_t   temp_storage_bytes = 0;
+    cub::DeviceScan::ExclusiveSum(d_temp_storage, temp_storage_bytes, nnz, ownStart, nCells + 1);
+
+    // Allocate temporary storage for exclusive prefix scan
+    cudaMalloc(&d_temp_storage, temp_storage_bytes);
+
+    // Run exclusive prefix min-scan
+    cub::DeviceScan::ExclusiveSum(d_temp_storage, temp_storage_bytes, nnz, ownStart, nCells + 1);
+
+    cudaApplyPermutation<int><<<numBlocks, NUM_THREADS_PER_BLOCK>>>
+    (
+        totNnz,
+        ldu2csr,
+        colIndTmp,
+        colInd
+    );
+
+    cudaDeviceSynchronize();
+
+    // cudaFree(nnz);
+    cudaFree(d_temp_storage);
+
+    CHECK_LAST_CUDA_ERROR();
+    return;
+}
+
 // * * * * * * * * * * * * * Explicit instantiations  * * * * * * * * * * * //
 
-#define makecudaCsrAddressingExecutor(Type)                             \
-    template Type* Foam::cudaCsrAddressingExecutor::alloc<Type>         \
-    (                                                                   \
-        int size                                                   \
-    ) const;                                                            \
-    template void  Foam::cudaCsrAddressingExecutor::clear<Type>         \
-    (                                                                   \
-        Type* ptr                                                       \
+#define makecudaCsrAddressingExecutor(Type)                                   \
+    template Type* Foam::cudaCsrAddressingExecutor::alloc<Type>               \
+    (                                                                         \
+        Foam::label size                                                      \
+    ) const;                                                                  \
+    template const Type* Foam::cudaCsrAddressingExecutor::copyFromFoam<Type>  \
+    (                                                                         \
+        Foam::label size,                                                     \
+        const Type* hostPtr                                                   \
+    ) const;                                                                  \
+    template void  Foam::cudaCsrAddressingExecutor::clear<Type>               \
+    (                                                                         \
+        Type* ptr                                                             \
+    ) const;                                                                  \
+    template void  Foam::cudaCsrAddressingExecutor::clear<Type>               \
+    (                                                                         \
+        const Type* ptr                                                       \
     ) const;
 
-makecudaCsrAddressingExecutor(int)
-makecudaCsrAddressingExecutor(double)
-
-// ************************************************************************* //
+makecudaCsrAddressingExecutor(Foam::label)
+makecudaCsrAddressingExecutor(Foam::scalar)
 

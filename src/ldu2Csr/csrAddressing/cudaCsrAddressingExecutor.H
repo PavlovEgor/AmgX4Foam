@@ -40,6 +40,7 @@ SourceFiles
 #ifndef cuda_CsrAddressing_Executor_H
 #define cuda_CsrAddressing_Executor_H
 
+#include "label.H"
 
 namespace Foam
 {
@@ -56,11 +57,73 @@ public:
     ~cudaCsrAddressingExecutor() {};
 
     template<class Type>
-    Type* alloc(int size) const;
+    Type* alloc(Foam::label size) const;
+
+    template<class Type>
+    const Type* copyFromFoam(Foam::label size, const Type* hostPtr) const;
 
     template<class Type>
     void clear(Type* ptr) const;
 
+    template<class Type>
+    void clear(const Type* ptr) const;
+
+    void initializeAddressing
+    (
+        const label   nCells,
+        const label   nInternalFaces,
+        const label   totNnz,
+        const label * const owner,
+        const label * const neighbour,
+              label * tmpPerm,
+              label * rowIndTmp,
+              label * colIndTmp
+    ) const;
+
+    void initializeAddressingExt
+    (
+        const label   nCells,
+        const label   nInternalFaces,
+        const label   nnzExt,
+        const label   totNnz,
+        const label * const owner,
+        const label * const neighbour,
+        const label * const extRows,
+        const label * const extCols,
+              label * tmpPerm,
+              label * rowIndTmp,
+              label * colIndTmp
+    ) const;
+
+    void computeSorting
+    (
+        const label   totNnz,
+              label * tmpPerm,
+              label * rowIndTmp,
+              label * rowInd,
+              label * ldu2csr
+    ) const;
+
+    void localToGlobalColIndices
+    (
+        const label   nRows,
+        const label   nIntFaces,
+        const label   diagIndexGlobal,
+        const label   lowOffGlobal,
+        const label   uppOffGlobal,
+              label * colIndicesGlobal
+    ) const;
+
+    void applyAddressingPermutation
+    (
+        const label   nCells,
+        const label   totNnz,
+        const label * const ldu2csr,
+        const label * const colIndTmp,
+        const label * const rowInd,
+              label * colInd,
+              label * ownStart
+    ) const;
 };
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //

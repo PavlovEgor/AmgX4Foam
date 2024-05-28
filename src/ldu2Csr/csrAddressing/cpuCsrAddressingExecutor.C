@@ -62,6 +62,11 @@ void Foam::cpuCsrAddressingExecutor::clear(Type* ptr) const
     delete ptr;
 }
 
+template<class Type>
+void Foam::cpuCsrAddressingExecutor::clear(const Type* ptr) const
+{
+}
+
 void Foam::cpuCsrAddressingExecutor::initializeAddressing
 (
     const Foam::label   nCells,
@@ -141,8 +146,8 @@ void Foam::cpuCsrAddressingExecutor::initializeAddressingExt
 void Foam::cpuCsrAddressingExecutor::computeSorting
 (
     const label   totNnz,
-    const label * const tmpPerm,
-    const label * const rowIndTmp,
+          label * tmpPerm,
+          label * rowIndTmp,
           label * rowInd,
           label * ldu2csr
 ) const
@@ -231,6 +236,10 @@ void Foam::cpuCsrAddressingExecutor::applyAddressingPermutation
     template void  Foam::cpuCsrAddressingExecutor::clear<Type>                \
     (                                                                         \
         Type* ptr                                                             \
+    ) const;                                                                  \
+    template void  Foam::cpuCsrAddressingExecutor::clear<Type>                \
+    (                                                                         \
+        const Type* ptr                                                       \
     ) const;
 
 makecpuCsrAddressingExecutor(Foam::label)

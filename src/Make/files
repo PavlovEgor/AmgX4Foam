@@ -1,8 +1,10 @@
+global.cu
 AmgX/AmgXLinearSolverContext.C
 AmgX/AmgXSolver.C
 AmgX/AmgXWrapper.C
 ldu2Csr/csrAddressing/csrAddressingFunctions.C
 ldu2Csr/csrAddressing/cpuCsrAddressingExecutor.C
+ldu2Csr/csrAddressing/cudaCsrAddressingExecutor.cu
 ldu2Csr/csrMatrix/cpuCsrMatrices.C
 utility/linearSolverContextTable.C
 

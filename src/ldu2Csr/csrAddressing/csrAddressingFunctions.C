@@ -122,8 +122,8 @@ inline void Foam::csrAddressing::initializeAddressingExt
 inline void Foam::csrAddressing::computeSorting
 (
     const label   totNnz,
-    const label * const tmpPerm,
-    const label * const rowIndTmp,
+          label * tmpPerm,
+          label * rowIndTmp,
           label * rowInd,
           label * ldu2csr
 )
