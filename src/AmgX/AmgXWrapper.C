@@ -147,7 +147,9 @@ void Foam::AmgXWrapper::initComms(const int &commId)
     myGpuWorldRank_ = Pstream::myProcNo(gpuWorld_);
 
     cudaGetDeviceCount(&nDevs_);
-    cudaGetDevice(&devID_);
+    // cudaGetDevice(&devID_);
+    devID_ = myGpuWorldRank_ % nDevs_;
+    cudaSetDevice(devID_);
 }
 
 
@@ -300,37 +302,6 @@ void Foam::AmgXWrapper::setOperator
         ownStart = matrix->ownerStart();
         colInd = matrix->colIndices();
         matValues = matrix->values();
-
-        // AMGX_pin_memory((void*) ownStart, (nLocalRows+1)*sizeof(int));
-        // AMGX_pin_memory((void*) colInd, (nLocalNz+1)*sizeof(int));
-        // AMGX_pin_memory((void*) matValues, (nLocalRows+1)*sizeof(double));
-
-        //- Print matrix converted to check
-        double * val = new double[nLocalNz];
-        cudaMemcpy((void*) val, (const void*) matValues, sizeof(double)*nLocalNz, cudaMemcpyDeviceToHost);
-        string fileName = "val-escape" + std::to_string(Pstream::myProcNo());
-        std::ofstream outFile1(fileName); //, std::ios_base::app);
-        outFile1 << nl << "values:" << nl;
-        for(int i=0; i< nLocalNz; ++i) outFile1 << val[i] << nl;
-        outFile1.close();
-
-        int * own = new int[nLocalRows+1];
-        cudaMemcpy((void*) own, (const void*) ownStart, sizeof(int)*(nLocalRows+1), cudaMemcpyDeviceToHost);
-        fileName = "ownerStart-escape" + std::to_string(Pstream::myProcNo());
-        std::ofstream outFile2(fileName); //, std::ios_base::app);
-        outFile2 << "ownerStart:" << nl;
-        for(int i=0; i< nLocalRows+1; ++i){
-            outFile2 << own[i] << nl;
-        }
-        outFile2.close();
-
-        int * col = new int[nLocalNz];
-        cudaMemcpy((void*) col, (const void*) colInd, sizeof(int)*nLocalNz, cudaMemcpyDeviceToHost);
-        fileName = "colInd-escape" + std::to_string(Pstream::myProcNo());
-        std::ofstream outFile3(fileName); //, std::ios_base::app);
-        outFile3 << nl << "colInd:" << nl;
-        for(int i=0; i< nLocalNz; ++i) outFile3 << col[i] << nl;
-        outFile3.close();
     }
     //- upload matrix A to AmgX
     if (!Pstream::parRun())
