@@ -427,7 +427,7 @@ void Foam::cudaCsrAddressingExecutor::applyAddressingPermutation
     //Foam::deviceField<Foam::label> nnz(nCells + 1, Foam::Zero);
     label * nnz;
     cudaMalloc((void **)&nnz, (nCells + 1)*sizeof(label));
-    cudaMemset((void **)&nnz, 0, (nCells + 1)*sizeof(label));
+    cudaMemset((void *)nnz, 0, (nCells + 1)*sizeof(label));
 
     cudaDeviceSynchronize();
 
