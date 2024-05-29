@@ -241,7 +241,7 @@ void Foam::csrMatrix:: applyPermutation
 
     label nCells = lduMatrix.diag().size();
     label nIntFaces = lduMatrix.upper().size();
-    label totNnz = nCells + 2*nIntFaces;
+    label totNnz = nCells + 2*nIntFaces + nnzExt;
 
     const scalar * diag = nullptr;
     const scalar * upper = nullptr;
@@ -272,7 +272,7 @@ void Foam::csrMatrix:: applyPermutation
                csrAddrExec_);
     }
 
-    // Initialize valuesTmp = [(diag), (upper), (lower), (extValues)]
+    //- Initialize valuesTmp = [(diag), (upper), (lower), (extValues)]
     // scalarField valuesTmp(totNnz);
     scalar* valuesTmp = nullptr;
     std::visit([&valuesTmp, totNnz](const auto& exec)
@@ -302,6 +302,18 @@ void Foam::csrMatrix:: applyPermutation
 
     std::visit([valuesTmp](const auto& exec)
                {exec.template clear<scalar>(valuesTmp); },
+               csrAddrExec_);
+    std::visit([diag](const auto& exec)
+               {exec.template clear<scalar>(diag); },
+               csrAddrExec_);
+    std::visit([upper](const auto& exec)
+               {exec.template clear<scalar>(upper); },
+               csrAddrExec_);
+    std::visit([lower](const auto& exec)
+               {exec.template clear<scalar>(lower); },
+               csrAddrExec_);
+    std::visit([extVals](const auto& exec)
+               {exec.template clear<scalar>(extVals); },
                csrAddrExec_);
 }
 
