@@ -66,7 +66,7 @@ class csrMatrix
     // Private Data
 
         //- Data executor
-        static csrMatrixExecutor csrMatExec_;
+        csrMatrixExecutor csrMatExec_;
 
         //- Coefficients
         scalar *valuesPtr_;

@@ -41,9 +41,8 @@ SourceFiles
 
 #ifdef have_cuda
 #include "cudaCsrMatrixExecutor.H"
-#else
-#include "cpuCsrMatrixExecutor.H"
 #endif
+#include "cpuCsrMatrixExecutor.H"
 #include <variant>
 
 namespace Foam
@@ -52,10 +51,9 @@ namespace Foam
 using csrMatrixExecutor = std::variant
     <
 #ifdef have_cuda
-    cudaCsrMatrixExecutor
-#else
-    cpuCsrMatrixExecutor
+    cudaCsrMatrixExecutor,
 #endif
+    cpuCsrMatrixExecutor
     >;
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //

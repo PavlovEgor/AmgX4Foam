@@ -30,19 +30,30 @@ License
 
 // * * * * * * * * * * * * * * Static Data Members * * * * * * * * * * * * * //
 
-#ifdef have_cuda
-Foam::csrMatrixExecutor Foam::csrMatrix::csrMatExec_ = cudaCsrMatrixExecutor();
-#else
-Foam::csrMatrixExecutor Foam::csrMatrix::csrMatExec_ = cpuCsrMatrixExecutor();
-#endif
-
 // * * * * * * * * * * * * * * * Constructors * * * * * * * * * * * * * * * //
 
 Foam::csrMatrix::csrMatrix(word mode)
 :
     csrAddressing(mode),
     valuesPtr_(nullptr)
-{}
+{
+    if (mode.starts_with("h"))
+    {
+        csrMatExec_ = cpuCsrMatrixExecutor();
+	}
+#ifdef have_cuda    
+    else if (mode.starts_with("d"))
+    {
+        csrMatExec_ = cudaCsrMatrixExecutor();
+	}
+#endif
+    else
+    {
+        FatalErrorInFunction
+            << "'" << mode << "' is not a valid AMGx execution mode"
+            << exit(FatalError);
+    }
+}
 
 //Foam::csrMatrix::csrMatrix(const csrMatrix& A)
 //:
