@@ -38,9 +38,9 @@ Foam::csrMatrixExecutor Foam::csrMatrix::csrMatExec_ = cpuCsrMatrixExecutor();
 
 // * * * * * * * * * * * * * * * Constructors * * * * * * * * * * * * * * * //
 
-Foam::csrMatrix::csrMatrix()
+Foam::csrMatrix::csrMatrix(word mode)
 :
-    csrAddressing(),
+    csrAddressing(mode),
     valuesPtr_(nullptr)
 {}
 

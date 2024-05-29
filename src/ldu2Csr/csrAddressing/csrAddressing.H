@@ -71,7 +71,7 @@ class csrAddressing
 protected:
     //- Protected Data
 
-        static csrAddressingExecutor csrAddrExec_;
+	    csrAddressingExecutor csrAddrExec_;
 
         //- Number of blocks
         label nBlocks_ = 1;
@@ -173,7 +173,7 @@ public:
 
         //- Construct default.
         //  The coefficients are initialized empty.
-        csrAddressing();
+        csrAddressing(word mode);
 
 //        //- Construct as copy
 //        csrAddressing(const csrAddressing& A);

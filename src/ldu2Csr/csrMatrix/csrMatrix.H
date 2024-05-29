@@ -117,7 +117,7 @@ public:
 
         //- Construct default.
         //  The coefficients are initialized empty.
-        csrMatrix();
+        csrMatrix(word mode);
 
 //        //- Construct as copy
 //        csrMatrix(const csrMatrix& A);

@@ -49,7 +49,8 @@ namespace Foam
 
 using csrAddressingExecutor = std::variant
     <
-    cudaCsrAddressingExecutor
+    cudaCsrAddressingExecutor,
+	cpuCsrAddressingExecutor
     >;
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //

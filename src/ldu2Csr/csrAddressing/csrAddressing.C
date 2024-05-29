@@ -32,16 +32,31 @@ License
 
 // * * * * * * * * * * * * * * Static Data Members * * * * * * * * * * * * * //
 
-Foam::csrAddressingExecutor Foam::csrAddressing::csrAddrExec_ = cudaCsrAddressingExecutor();
+//Foam::csrAddressingExecutor Foam::csrAddressing::csrAddrExec_ = cudaCsrAddressingExecutor();
 
 // * * * * * * * * * * * * * * * Constructors * * * * * * * * * * * * * * * //
 
-Foam::csrAddressing::csrAddressing()
+Foam::csrAddressing::csrAddressing(word mode)
 :
     ownerStartPtr_(nullptr),
     colIndicesPtr_(nullptr),
     ldu2csrPerm_(nullptr)
-{}
+{
+    if (mode.starts_with("d"))
+    {
+        csrAddrExec_ = cudaCsrAddressingExecutor();
+	}
+    else if (mode.starts_with("h"))
+    {
+        csrAddrExec_ = cpuCsrAddressingExecutor();
+	}
+    else
+    {
+        FatalErrorInFunction
+            << "'" << mode << "' is not a valid AMGx execution mode"
+            << exit(FatalError);
+    }
+}
 
 //Foam::csrAddressing::csrAddressing(const csrAddressing& A)
 //:
