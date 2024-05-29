@@ -114,13 +114,27 @@ void Foam::csrMatrix::applyPermutation(const lduMatrix& lduMatrix)
         computePermutation(&(lduMatrix.lduAddr()));
     }
 
-    const scalarField& diag = lduMatrix.diag();
-    const scalarField& upper = lduMatrix.upper();
-    const scalarField& lower = lduMatrix.lower();
+    const scalar * foamDiag = lduMatrix.diag().cdata();
+    const scalar * foamUpper = lduMatrix.upper().cdata();
+    const scalar * foamLower = lduMatrix.lower().cdata();
 
-    label nCells = diag.size();
-    label nIntFaces = upper.size();
+    label nCells = lduMatrix.diag().size();
+    label nIntFaces = lduMatrix.upper().size();
     label totNnz = nCells + 2*nIntFaces;
+
+    const scalar * diag = nullptr;
+    const scalar * upper = nullptr;
+    const scalar * lower = nullptr;
+
+    std::visit([&foamDiag, &diag, nCells](const auto& exec)
+               { diag = exec.template copyFromFoam<scalar>(nCells, foamDiag); },
+               csrAddrExec_);
+    std::visit([&foamUpper, &upper, nIntFaces](const auto& exec)
+               { upper = exec.template copyFromFoam<scalar>(nIntFaces, foamUpper); },
+               csrAddrExec_);
+    std::visit([&foamLower, &lower, nIntFaces](const auto& exec)
+               { lower = exec.template copyFromFoam<scalar>(nIntFaces, foamLower); },
+               csrAddrExec_);
 
     if(!valuesPtr_)
     {
@@ -141,9 +155,9 @@ void Foam::csrMatrix::applyPermutation(const lduMatrix& lduMatrix)
     (
         nCells,
         nIntFaces,
-        diag.cdata(),
-        upper.cdata(),
-        lower.cdata(),
+        diag,
+        upper,
+        lower,
         valuesTmp
     );
 
@@ -191,7 +205,7 @@ void Foam::csrMatrix:: applyPermutation
         }
     }
 
-    scalarField extVals(nnzExt, Foam::Zero);
+    scalarField foamExtVals(nnzExt, Foam::Zero);
 
     nnzExt = 0;
 
@@ -203,20 +217,38 @@ void Foam::csrMatrix:: applyPermutation
             const scalarField& bCoeffs = interfaceBouCoeffs[patchi];
             const label len = bCoeffs.size();
 
-            SubList<scalar>(extVals, len, nnzExt) = bCoeffs;
+            SubList<scalar>(foamExtVals, len, nnzExt) = bCoeffs;
             nnzExt += len;
         }
     }
 
-    extVals.negate();
+    foamExtVals.negate();
 
-    const scalarField& diag = lduMatrix.diag();
-    const scalarField& upper = lduMatrix.upper();
-    const scalarField& lower = lduMatrix.lower();
+    const scalar * foamDiag = lduMatrix.diag().cdata();
+    const scalar * foamUpper = lduMatrix.upper().cdata();
+    const scalar * foamLower = lduMatrix.lower().cdata();
 
-    label nIntFaces = upper.size();
-    label nCells = diag.size();
-    label totNnz = nCells + 2*nIntFaces + nnzExt;
+    label nCells = lduMatrix.diag().size();
+    label nIntFaces = lduMatrix.upper().size();
+    label totNnz = nCells + 2*nIntFaces;
+
+    const scalar * diag = nullptr;
+    const scalar * upper = nullptr;
+    const scalar * lower = nullptr;
+    const scalar * extVals = nullptr;
+
+    std::visit([&foamDiag, &diag, nCells](const auto& exec)
+               { diag = exec.template copyFromFoam<scalar>(nCells, foamDiag); },
+               csrAddrExec_);
+    std::visit([&foamUpper, &upper, nIntFaces](const auto& exec)
+               { upper = exec.template copyFromFoam<scalar>(nIntFaces, foamUpper); },
+               csrAddrExec_);
+    std::visit([&foamLower, &lower, nIntFaces](const auto& exec)
+               { lower = exec.template copyFromFoam<scalar>(nIntFaces, foamLower); },
+               csrAddrExec_);
+    std::visit([&foamExtVals, &extVals, nnzExt](const auto& exec)
+               { extVals = exec.template copyFromFoam<scalar>(nnzExt, foamExtVals.cdata()); },
+               csrAddrExec_);
 
     //- Compute global number of equations
     nGlobalCells = returnReduce(nCells, sumOp<label>());
@@ -241,10 +273,10 @@ void Foam::csrMatrix:: applyPermutation
         nCells,
         nIntFaces,
         nnzExt,
-        diag.cdata(),
-        upper.cdata(),
-        lower.cdata(),
-        extVals.cdata(),
+        diag,
+        upper,
+        lower,
+        extVals,
         valuesTmp
     );
 

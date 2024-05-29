@@ -177,7 +177,7 @@ void cudaApplyPermutation
     const T   * const srcArray,
           T   *       dstArray
 )
-{
+{    
     int i = blockIdx.x * blockDim.x + threadIdx.x;
 
     if(i < length)
@@ -186,58 +186,6 @@ void cudaApplyPermutation
     }
 }
 
-__global__
-void cudaInitializeValueD
-(
-    const int   nCells,
-    const double * const diag,
-          double * valuesTmp
-)
-{
-    int i = blockIdx.x * blockDim.x + threadIdx.x;
-
-    if(i < nCells)
-    {
-        valuesTmp[i] = diag[i];
-    }
-}
-
-__global__
-void cudaInitializeValueUL
-(
-    const int   nCells,
-    const int   nIntFaces,
-    const double * const upper,
-    const double * const lower,
-          double * valuesTmp
-)
-{
-    int i = blockIdx.x * blockDim.x + threadIdx.x;
-
-    if(i < nIntFaces)
-    {
-        valuesTmp[nCells + i] = upper[i];
-        valuesTmp[nCells + nIntFaces + i] = lower[i];
-    }
-}
-
-__global__
-void cudaInitializeValueExt
-(
-    const int   nCells,
-    const int   nIntFaces,
-    const int   nnzExt,
-    const double * const extValues,
-          double * valuesTmp
-)
-{
-    int i = blockIdx.x * blockDim.x + threadIdx.x;
-
-    if(i < nnzExt)
-    {
-        valuesTmp[nCells + 2*nIntFaces + i] = extValues[i];
-    }
-}
 
 // * * * * * * * * * * * * Public Member Functions * * * * * * * * * * * * * //
 
@@ -320,16 +268,13 @@ void Foam::cudaCsrAddressingExecutor::initializeAddressing
 
     // Initialize: rowindicesTmp = [0, ... nCells-1, (owner), (neighbour)]
     //             colindicesTmp = [0, ... nCells-1, (neighbour), (owner)]
-    if(nCells > 0)
-    {
-        numBlocks = nCells / NUM_THREADS_PER_BLOCK + 1;
-        cudaInitializeSequencePair<<<numBlocks, NUM_THREADS_PER_BLOCK>>>
-        (
-            nCells,
-            rowIndTmp,
-            colIndTmp
-        );
-    }
+    numBlocks = (nCells + NUM_THREADS_PER_BLOCK - 1) / NUM_THREADS_PER_BLOCK + 1;
+    cudaInitializeSequencePair<<<numBlocks, NUM_THREADS_PER_BLOCK>>>
+    (
+        nCells,
+        rowIndTmp,
+        colIndTmp
+    );
 
     numBlocks = (nInternalFaces + NUM_THREADS_PER_BLOCK - 1) / NUM_THREADS_PER_BLOCK;
     cudaInitializeAddr<<<numBlocks, NUM_THREADS_PER_BLOCK>>>
@@ -402,6 +347,15 @@ void Foam::cudaCsrAddressingExecutor::computeSorting
           label * ldu2csr
 ) const
 {
+    label * rowIndHost = new label[totNnz];
+    cudaMemcpy((void *) rowIndHost, (const void *) rowIndTmp, sizeof(label)*totNnz, cudaMemcpyDeviceToHost);
+    Info << "-> rowIndTmp array: ";
+    for(int i=0; i<10; ++i) Info << rowIndHost[i] << " ";
+    Info << nl;
+    label check = 0;
+    for(int i=0; i<totNnz; ++i) check += rowIndHost[i];
+    Info << "-> sum of rowINdTmp = " << check << nl;
+    
     cub::DoubleBuffer<label> d_keys(rowIndTmp, rowInd);
     cub::DoubleBuffer<label> d_values(tmpPerm, ldu2csr);
 
@@ -435,16 +389,13 @@ void Foam::cudaCsrAddressingExecutor::localToGlobalColIndices
 {
     label numBlocks;
 
-    if(nRows > 0)
-    {
-        numBlocks = (nRows + NUM_THREADS_PER_BLOCK - 1) / NUM_THREADS_PER_BLOCK;
-        cudaLocToGlobD<<<numBlocks, NUM_THREADS_PER_BLOCK>>>
-        (
-            nRows,
-            diagIndexGlobal,
-            colIndicesGlobal
-        );
-    }
+    numBlocks = (nRows + NUM_THREADS_PER_BLOCK - 1) / NUM_THREADS_PER_BLOCK;
+    cudaLocToGlobD<<<numBlocks, NUM_THREADS_PER_BLOCK>>>
+    (
+        nRows,
+        diagIndexGlobal,
+        colIndicesGlobal
+    );
 
     numBlocks = (nIntFaces + NUM_THREADS_PER_BLOCK - 1) / NUM_THREADS_PER_BLOCK;
     cudaLocToGlobON<<<numBlocks, NUM_THREADS_PER_BLOCK>>>
@@ -478,7 +429,15 @@ void Foam::cudaCsrAddressingExecutor::applyAddressingPermutation
     cudaMalloc((void **)&nnz, (nCells + 1)*sizeof(label));
     cudaMemset((void **)&nnz, 0, (nCells + 1)*sizeof(label));
 
+    cudaDeviceSynchronize();
+
+    //cudaMemset((void **)&ownStart, 0, (nCells + 1)*sizeof(label));
+
     label numBlocks = (totNnz + NUM_THREADS_PER_BLOCK - 1) / NUM_THREADS_PER_BLOCK;
+
+    Info << "--> totNnz = " << totNnz << nl;
+    Info << "--> thread per block = " << NUM_THREADS_PER_BLOCK << ", numBlocks = " << numBlocks << nl;
+
     cudaComputeNNZ<<<numBlocks, NUM_THREADS_PER_BLOCK>>>
     (
         totNnz,
@@ -486,6 +445,12 @@ void Foam::cudaCsrAddressingExecutor::applyAddressingPermutation
         nnz
     );
     cudaDeviceSynchronize();
+
+    label * nnzHost = new label[nCells+1];
+    cudaMemcpy((void *) nnzHost, (const void *) nnz, sizeof(label)*(nCells+1), cudaMemcpyDeviceToHost);
+    Info << "-> nnz array: ";
+    for(int i=0; i<10; ++i) Info << nnzHost[i] << " ";
+    Info << nl;
 
     // Determine temporary device storage requirements for exclusive prefix scan
     void     *d_temp_storage = NULL;
@@ -498,6 +463,23 @@ void Foam::cudaCsrAddressingExecutor::applyAddressingPermutation
     // Run exclusive prefix min-scan
     cub::DeviceScan::ExclusiveSum(d_temp_storage, temp_storage_bytes, nnz, ownStart, nCells + 1);
 
+    /*label * ownStartHost = new label[nCells+1];
+    label * rowIndHost = new label[totNnz];
+    cudaMemcpy((void *) rowIndHost, (const void *) rowInd, sizeof(label)*totNnz, cudaMemcpyDeviceToHost);
+    ownStartHost[0] = 0;
+    label curRow = 0;
+    for(label i=0; i<totNnz; ++i)
+    {
+        if(curRow < rowIndHost[i])
+        {
+            if(rowIndHost[i] > nCells) fprintf(stderr, "-> row index too high\n");
+            ownStartHost[rowIndHost[i]] = i;
+        }
+        curRow = rowIndHost[i];
+    }
+    ownStartHost[nCells] = totNnz;
+    cudaMemcpy((void *) ownStart, (const void *) ownStartHost, sizeof(label)*(nCells+1), cudaMemcpyHostToDevice);*/
+
     cudaApplyPermutation<int><<<numBlocks, NUM_THREADS_PER_BLOCK>>>
     (
         totNnz,
@@ -505,6 +487,12 @@ void Foam::cudaCsrAddressingExecutor::applyAddressingPermutation
         colIndTmp,
         colInd
     );
+
+    label * colIndHost = new label[totNnz];
+    cudaMemcpy((void *) colIndHost, (const void *) colInd, sizeof(label)*totNnz, cudaMemcpyDeviceToHost);
+    label check = 0;
+    for(int i=0; i<totNnz; ++i) check += colIndHost[i];
+    Info << "-> sum of colIndTmp = " << check << nl;
 
     cudaDeviceSynchronize();
 
