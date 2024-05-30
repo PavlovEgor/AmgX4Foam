@@ -70,9 +70,6 @@ protected:
         //- Data executor
         csrMatrixExecutor csrMatExec_;
 
-        //- Coefficients
-        scalar *valuesPtr_;
-
         //- Number of blocks
         label nBlocks_ = 1;
 
@@ -90,6 +87,9 @@ protected:
 
         //- Permutation ldu2csr array
         label* ldu2csrPerm_;
+
+        //- Coefficients
+        scalar* valuesPtr_;
 
     //- Protected functions
         void initializeAddressing

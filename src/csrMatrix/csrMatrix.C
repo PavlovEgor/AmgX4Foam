@@ -103,11 +103,15 @@ void Foam::csrMatrix::finalize()
     if (ownerStartPtr_)
     {
         // delete ownerStartPtr_;
+        std::visit([this](const auto& exec)
+               {exec.template clear<label>(this->ownerStartPtr_); }, csrMatExec_);
     }
 
     if (colIndicesPtr_)
     {
         // delete colIndicesPtr_;
+        std::visit([this](const auto& exec)
+               {exec.template clear<label>(this->colIndicesPtr_); }, csrMatExec_);
     }
 
     if (ldu2csrPerm_)
@@ -149,6 +153,8 @@ void Foam::csrMatrix::clearAddressing()
         //delete ownerStartPtr_;
         std::visit([this](const auto& exec)
                {exec.template clear<label>(this->ownerStartPtr_); }, csrMatExec_);
+
+        ownerStartPtr_ = nullptr;
     }
 
     if (colIndicesPtr_)
@@ -156,6 +162,8 @@ void Foam::csrMatrix::clearAddressing()
         //delete colIndicesPtr_;
         std::visit([this](const auto& exec)
                {exec.template clear<label>(this->colIndicesPtr_); }, csrMatExec_);
+        
+        colIndicesPtr_ = nullptr;
     }
 }
 
