@@ -170,14 +170,13 @@ void cudaComputeNNZ
     }
 }
 
-template<typename T>
 __global__
 void cudaApplyPermutation
 (
     const int   length,
     const int * const permArray,
-    const T   * const srcArray,
-          T   *       dstArray
+    const int * const srcArray,
+          int * dstArray
 )
 {    
     int i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -242,7 +241,7 @@ void cudaInitializeValueExt
 }
 
 __global__
-void cudaApplyPermutation 
+void cudaApplyValuePermutation 
 (
     const int      length,
     const int      blockLen,
@@ -516,7 +515,7 @@ void Foam::cudaCsrMatrixExecutor::applyAddressingPermutation
     // Run exclusive prefix min-scan
     cub::DeviceScan::ExclusiveSum(d_temp_storage, temp_storage_bytes, nnz, ownStart, nCells + 1);
 
-    cudaApplyPermutation<int><<<numBlocks, NUM_THREADS_PER_BLOCK>>>
+    cudaApplyPermutation<<<numBlocks, NUM_THREADS_PER_BLOCK>>>
     (
         totNnz,
         ldu2csr,
@@ -622,7 +621,7 @@ void Foam::cudaCsrMatrixExecutor::applyValuePermutation
 {
     int blockLen = nBlocks*nBlocks;
     int numBlocks = (totNnz + NUM_THREADS_PER_BLOCK - 1) / NUM_THREADS_PER_BLOCK;
-    cudaApplyPermutation<<<numBlocks, NUM_THREADS_PER_BLOCK>>>
+    cudaApplyValuePermutation<<<numBlocks, NUM_THREADS_PER_BLOCK>>>
     (
         totNnz,
         blockLen,
