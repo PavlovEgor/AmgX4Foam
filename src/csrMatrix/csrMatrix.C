@@ -26,30 +26,31 @@ License
 
 \*---------------------------------------------------------------------------*/
 
-#include "csrAddressing.H"
+#include "csrMatrix.H"
 
 #include "globalIndex.H"
 
 // * * * * * * * * * * * * * * Static Data Members * * * * * * * * * * * * * //
 
-//Foam::csrAddressingExecutor Foam::csrAddressing::csrAddrExec_ = cudaCsrAddressingExecutor();
-
 // * * * * * * * * * * * * * * * Constructors * * * * * * * * * * * * * * * //
 
-Foam::csrAddressing::csrAddressing(word mode)
+Foam::csrMatrix::csrMatrix(word mode)
 :
     ownerStartPtr_(nullptr),
     colIndicesPtr_(nullptr),
-    ldu2csrPerm_(nullptr)
+    ldu2csrPerm_(nullptr),
+    valuesPtr_(nullptr)
 {
-    if (mode.starts_with("d"))
+    if (mode.starts_with("h"))
     {
-        csrAddrExec_ = cudaCsrAddressingExecutor();
+        csrMatExec_ = cpuCsrMatrixExecutor();
 	}
-    else if (mode.starts_with("h"))
+#ifdef have_cuda    
+    else if (mode.starts_with("d"))
     {
-        csrAddrExec_ = cpuCsrAddressingExecutor();
+        csrMatExec_ = cudaCsrMatrixExecutor();
 	}
+#endif
     else
     {
         FatalErrorInFunction
@@ -58,78 +59,47 @@ Foam::csrAddressing::csrAddressing(word mode)
     }
 }
 
-//Foam::csrAddressing::csrAddressing(const csrAddressing& A)
+//Foam::csrMatrix::csrMatrix(const csrMatrix& A)
 //:
-//    ownerStartPtr_(nullptr),
-//    colIndicesPtr_(nullptr),
-//    ldu2csrPerm_(nullptr)
+//    csrMatrix(A),
+//    valuesPtr_(nullptr)
 //{
-//    if (A.ownerStartPtr_)
+//    if (A.valuesPtr_)
 //    {
-//        ownerStartPtr_ = new labelList(*(A.ownerStartPtr_));
-//    }
-//
-//    if (A.colIndicesPtr_)
-//    {
-//        colIndicesPtr_ = new labelList(*(A.colIndicesPtr_));
-//    }
-//
-//    if (A.ldu2csrPerm_)
-//    {
-//        ldu2csrPerm_ = new labelList(*(A.ldu2csrPerm_));
+//        valuesPtr_ = new scalarField(*(A.valuesPtr_));
 //    }
 //}
 //
 //
-//Foam::csrAddressing::csrAddressing(csrAddressing& A, bool reuse)
+//Foam::csrMatrix::csrMatrix(csrMatrix& A, bool reuse)
 //:
-//    ownerStartPtr_(nullptr),
-//    colIndicesPtr_(nullptr),
-//    ldu2csrPerm_(nullptr)
+//    csrMatrix(A, reuse),
+//    valuesPtr_(nullptr)
 //{
 //    if (reuse)
 //    {
-//        if (A.ownerStartPtr_)
+//        if (A.valuesPtr_)
 //        {
-//            ownerStartPtr_ = A.ownerStartPtr_;
-//            A.ownerStartPtr_ = nullptr;
-//        }
-//
-//        if (A.colIndicesPtr_)
-//        {
-//            colIndicesPtr_ = A.colIndicesPtr_;
-//            A.colIndicesPtr_ = nullptr;
-//        }
-//
-//        if (A.ldu2csrPerm_)
-//        {
-//            ldu2csrPerm_ = A.ldu2csrPerm_;
-//            A.ldu2csrPerm_ = nullptr;
+//            valuesPtr_ = A.valuesPtr_;
+//            A.valuesPtr_ = nullptr;
 //        }
 //    }
 //    else
 //    {
-//        if (A.ownerStartPtr_)
+//        if (A.valuesPtr_)
 //        {
-//            ownerStartPtr_ = new labelList(*(A.ownerStartPtr_));
-//        }
-//
-//        if (A.colIndicesPtr_)
-//        {
-//            colIndicesPtr_ = new labelList(*(A.colIndicesPtr_));
-//        }
-//
-//        if (A.ldu2csrPerm_)
-//        {
-//            ldu2csrPerm_ = new labelList(*(A.ldu2csrPerm_));
+//            valuesPtr_ = new scalarField(*(A.valuesPtr_));
 //        }
 //    }
 //}
 
 // * * * * * * * * * * * *  Public Member Functions * * * * * * * * * * * *  //
 
-void Foam::csrAddressing::finalizeAdressing()
+void Foam::csrMatrix::finalize()
 {
+    // NOTA: Implementare controllo con buleano o invalidazione del puntatore
+    //       per gestire bene la finalizzazione
+    
     if (ownerStartPtr_)
     {
         // delete ownerStartPtr_;
@@ -144,33 +114,53 @@ void Foam::csrAddressing::finalizeAdressing()
     {
         //delete ldu2csrPerm_;
         std::visit([this](const auto& exec)
-               {exec.template clear<label>(this->ldu2csrPerm_); }, csrAddrExec_);
+               {exec.template clear<label>(this->ldu2csrPerm_); }, csrMatExec_);
     }
+
+    if (valuesPtr_)
+    {
+        // delete valuesPtr_;
+        std::visit([this](const auto& exec)
+                {exec.template clear<scalar>(this->valuesPtr_); }, csrMatExec_);
+    }
+}
+
+
+const Foam::scalar* Foam::csrMatrix::values() const
+{
+    if (!valuesPtr_)
+    {
+        FatalErrorInFunction
+            << "valuesPtr_ unallocated"
+            << abort(FatalError);
+    }
+
+    return valuesPtr_;
 }
 
 
 // * * * * * * * * * * * * * * * * Operations * * * * * * * * * * * * * * * //
 
 //- Deallocate useless addressing pointer
-void Foam::csrAddressing::clearAddressing()
+void Foam::csrMatrix::clearAddressing()
 {
     if (ownerStartPtr_)
     {
         //delete ownerStartPtr_;
         std::visit([this](const auto& exec)
-               {exec.template clear<label>(this->ownerStartPtr_); }, csrAddrExec_);
+               {exec.template clear<label>(this->ownerStartPtr_); }, csrMatExec_);
     }
 
     if (colIndicesPtr_)
     {
         //delete colIndicesPtr_;
         std::visit([this](const auto& exec)
-               {exec.template clear<label>(this->colIndicesPtr_); }, csrAddrExec_);
+               {exec.template clear<label>(this->colIndicesPtr_); }, csrMatExec_);
     }
 }
 
 //- Find permutation array and new addressing vectors (no interface)
-void Foam::csrAddressing::computePermutation(const lduAddressing * addr)
+void Foam::csrMatrix::computePermutation(const lduAddressing * addr)
 {
 	const label* own = nullptr;
 	const label* neigh = nullptr;
@@ -182,10 +172,10 @@ void Foam::csrAddressing::computePermutation(const lduAddressing * addr)
 
 	std::visit([&hostOwn, &own, ownSize](const auto& exec)
                { own = exec.template copyFromFoam<label>(ownSize,hostOwn); },
-               csrAddrExec_);
+               csrMatExec_);
 	std::visit([&hostNeigh, &neigh, neighSize](const auto& exec)
                { neigh = exec.template copyFromFoam<label>(neighSize,hostNeigh); },
-               csrAddrExec_);
+               csrMatExec_);
     //const labelList& own = addr->lowerAddr();
     //const labelList& neigh = addr->upperAddr();
     
@@ -202,13 +192,13 @@ void Foam::csrAddressing::computePermutation(const lduAddressing * addr)
 
     std::visit([this, nCells](const auto& exec)
                { this->ownerStartPtr_ = exec.template alloc<label>(nCells+1); },
-               csrAddrExec_);
+               csrMatExec_);
     std::visit([this, totNnz](const auto& exec)
                { this->colIndicesPtr_ = exec.template alloc<label>(totNnz); },
-               csrAddrExec_);
+               csrMatExec_);
     std::visit([this, totNnz](const auto& exec)
                { this->ldu2csrPerm_ = exec.template alloc<label>(totNnz); },
-               csrAddrExec_);
+               csrMatExec_);
 
     label* rowIndices = nullptr;
     label* tmpPerm = nullptr;
@@ -216,16 +206,16 @@ void Foam::csrAddressing::computePermutation(const lduAddressing * addr)
 	label* colindicesTmp = nullptr;
     std::visit([&rowIndices, totNnz](const auto& exec)
                { rowIndices = exec.template alloc<label>(totNnz); },
-               csrAddrExec_);
+               csrMatExec_);
     std::visit([&tmpPerm, totNnz](const auto& exec)
                { tmpPerm = exec.template alloc<label>(totNnz); },
-               csrAddrExec_);
+               csrMatExec_);
     std::visit([&rowindicesTmp, totNnz](const auto& exec)
                { rowindicesTmp = exec.template alloc<label>(totNnz); },
-               csrAddrExec_);
+               csrMatExec_);
     std::visit([&colindicesTmp, totNnz](const auto& exec)
                { colindicesTmp = exec.template alloc<label>(totNnz); },
-               csrAddrExec_);
+               csrMatExec_);
     //labelList tmpPerm(totNnz);
     //labelList rowindicesTmp(totNnz);
     //labelList colindicesTmp(totNnz);
@@ -267,22 +257,22 @@ void Foam::csrAddressing::computePermutation(const lduAddressing * addr)
         ownerStartPtr_
     );
     std::visit([rowIndices](const auto& exec)
-               {exec.template clear<label>(rowIndices); }, csrAddrExec_);
+               {exec.template clear<label>(rowIndices); }, csrMatExec_);
     std::visit([tmpPerm](const auto& exec)
-               {exec.template clear<label>(tmpPerm); }, csrAddrExec_);
+               {exec.template clear<label>(tmpPerm); }, csrMatExec_);
     std::visit([rowindicesTmp](const auto& exec)
-               {exec.template clear<label>(rowindicesTmp); }, csrAddrExec_);
+               {exec.template clear<label>(rowindicesTmp); }, csrMatExec_);
     std::visit([colindicesTmp](const auto& exec)
-               {exec.template clear<label>(colindicesTmp); }, csrAddrExec_);
+               {exec.template clear<label>(colindicesTmp); }, csrMatExec_);
     std::visit([own](const auto& exec)
-               {exec.template clear<label>(own); }, csrAddrExec_);
+               {exec.template clear<label>(own); }, csrMatExec_);
     std::visit([neigh](const auto& exec)
-               {exec.template clear<label>(neigh); }, csrAddrExec_);
+               {exec.template clear<label>(neigh); }, csrMatExec_);
 }
 
 
 //- Find permutation array and new addressing vectors
-void Foam::csrAddressing::computePermutation
+void Foam::csrMatrix::computePermutation
 (
     const lduAddressing& addr,
     const lduInterfacePtrsList& interfaces,
@@ -302,10 +292,10 @@ void Foam::csrAddressing::computePermutation
 
 	std::visit([&hostOwn, &own, ownSize](const auto& exec)
                { own = exec.template copyFromFoam<label>(ownSize,hostOwn); },
-               csrAddrExec_);
+               csrMatExec_);
 	std::visit([&hostNeigh, &neigh, neighSize](const auto& exec)
                { neigh = exec.template copyFromFoam<label>(neighSize,hostNeigh); },
-               csrAddrExec_);
+               csrMatExec_);
 
 	const label nCells = addr.size();
     const label nIntFaces = ownSize;
@@ -394,10 +384,10 @@ void Foam::csrAddressing::computePermutation
     const label* extColsPtr = extCols.cdata();
 	std::visit([&extRowsPtr, &extDevRows, nnzExt](const auto& exec)
                { extDevRows = exec.template copyFromFoam<label>(nnzExt,extRowsPtr); },
-               csrAddrExec_);
+               csrMatExec_);
 	std::visit([&extColsPtr, &extDevCols, nnzExt](const auto& exec)
                { extDevCols = exec.template copyFromFoam<label>(nnzExt,extColsPtr); },
-               csrAddrExec_);
+               csrMatExec_);
 
     const label totNnz = nCells + 2*nIntFaces + nnzExt;
 
@@ -412,13 +402,13 @@ void Foam::csrAddressing::computePermutation
     nLocalNz_ = totNnz;
     std::visit([this, nCells](const auto& exec)
                { this->ownerStartPtr_ = exec.template alloc<label>(nCells+1); },
-               csrAddrExec_);
+               csrMatExec_);
     std::visit([this, totNnz](const auto& exec)
                { this->colIndicesPtr_ = exec.template alloc<label>(totNnz); },
-               csrAddrExec_);
+               csrMatExec_);
     std::visit([this, totNnz](const auto& exec)
                { this->ldu2csrPerm_ = exec.template alloc<label>(totNnz); },
-               csrAddrExec_);
+               csrMatExec_);
 
     label* rowIndices = nullptr;
     label* tmpPerm = nullptr;
@@ -427,16 +417,16 @@ void Foam::csrAddressing::computePermutation
 
     std::visit([&rowIndices, totNnz](const auto& exec)
                { rowIndices = exec.template alloc<label>(totNnz); },
-               csrAddrExec_);
+               csrMatExec_);
     std::visit([&tmpPerm, totNnz](const auto& exec)
                { tmpPerm = exec.template alloc<label>(totNnz); },
-               csrAddrExec_);
+               csrMatExec_);
     std::visit([&rowindicesTmp, totNnz](const auto& exec)
                { rowindicesTmp = exec.template alloc<label>(totNnz); },
-               csrAddrExec_);
+               csrMatExec_);
     std::visit([&colindicesTmp, totNnz](const auto& exec)
                { colindicesTmp = exec.template alloc<label>(totNnz); },
-               csrAddrExec_);
+               csrMatExec_);
 
     //labelList rowIndices(totNnz);
     //labelList tmpPerm(totNnz);
@@ -494,21 +484,226 @@ void Foam::csrAddressing::computePermutation
         ownerStartPtr_
     );
     std::visit([rowIndices](const auto& exec)
-               {exec.template clear<label>(rowIndices); }, csrAddrExec_);
+               {exec.template clear<label>(rowIndices); }, csrMatExec_);
     std::visit([tmpPerm](const auto& exec)
-               {exec.template clear<label>(tmpPerm); }, csrAddrExec_);
+               {exec.template clear<label>(tmpPerm); }, csrMatExec_);
     std::visit([rowindicesTmp](const auto& exec)
-               {exec.template clear<label>(rowindicesTmp); }, csrAddrExec_);
+               {exec.template clear<label>(rowindicesTmp); }, csrMatExec_);
     std::visit([colindicesTmp](const auto& exec)
-               {exec.template clear<label>(colindicesTmp); }, csrAddrExec_);
+               {exec.template clear<label>(colindicesTmp); }, csrMatExec_);
     std::visit([own](const auto& exec)
-               {exec.template clear<label>(own); }, csrAddrExec_);
+               {exec.template clear<label>(own); }, csrMatExec_);
     std::visit([neigh](const auto& exec)
-               {exec.template clear<label>(neigh); }, csrAddrExec_);
+               {exec.template clear<label>(neigh); }, csrMatExec_);
     std::visit([extDevRows](const auto& exec)
-               {exec.template clear<label>(extDevRows); }, csrAddrExec_);
+               {exec.template clear<label>(extDevRows); }, csrMatExec_);
     std::visit([extDevCols](const auto& exec)
-               {exec.template clear<label>(extDevCols); }, csrAddrExec_);
+               {exec.template clear<label>(extDevCols); }, csrMatExec_);
 }
+
+
+//- Apply permutation to LDU values (no permutation)
+void Foam::csrMatrix::applyPermutation(const lduMatrix& lduMatrix)
+{
+    // Verify that the permutation has already been computed
+    if(!ldu2csrPerm_)
+    {
+        computePermutation(&(lduMatrix.lduAddr()));
+    }
+
+    const scalar * foamDiag = lduMatrix.diag().cdata();
+    const scalar * foamUpper = lduMatrix.upper().cdata();
+    const scalar * foamLower = lduMatrix.lower().cdata();
+
+    label nCells = lduMatrix.diag().size();
+    label nIntFaces = lduMatrix.upper().size();
+    label totNnz = nCells + 2*nIntFaces;
+
+    const scalar * diag = nullptr;
+    const scalar * upper = nullptr;
+    const scalar * lower = nullptr;
+
+    std::visit([&foamDiag, &diag, nCells](const auto& exec)
+               { diag = exec.template copyFromFoam<scalar>(nCells, foamDiag); },
+               csrMatExec_);
+    std::visit([&foamUpper, &upper, nIntFaces](const auto& exec)
+               { upper = exec.template copyFromFoam<scalar>(nIntFaces, foamUpper); },
+               csrMatExec_);
+    std::visit([&foamLower, &lower, nIntFaces](const auto& exec)
+               { lower = exec.template copyFromFoam<scalar>(nIntFaces, foamLower); },
+               csrMatExec_);
+
+    if(!valuesPtr_)
+    {
+        // valuesPtr_ = new scalarField(totNnz);
+        std::visit([this, totNnz](const auto& exec)
+               { this->valuesPtr_ = exec.template alloc<scalar>(totNnz); },
+               csrMatExec_);
+    }
+
+    // Initialize valuesTmp = [(diag), (upper), (lower)]
+    // scalarField valuesTmp(totNnz);
+    scalar* valuesTmp = nullptr;
+    std::visit([&valuesTmp, totNnz](const auto& exec)
+               { valuesTmp = exec.template alloc<scalar>(totNnz); },
+               csrMatExec_);
+
+    initializeValue
+    (
+        nCells,
+        nIntFaces,
+        diag,
+        upper,
+        lower,
+        valuesTmp
+    );
+
+    // Apply permutation
+    applyValuePermutation
+    (
+        totNnz,
+        ldu2csrPerm_,
+        valuesTmp,
+        valuesPtr_
+    );
+
+    std::visit([valuesTmp](const auto& exec)
+               {exec.template clear<scalar>(valuesTmp); },
+               csrMatExec_);
+}
+
+
+//- Apply permutation from LDU to CSR considering the interface values
+void Foam::csrMatrix:: applyPermutation
+(
+    const lduMatrix& lduMatrix,
+    const FieldField<Field, scalar> interfaceBouCoeffs,
+          label& nGlobalCells
+)
+{
+    label nnzExt = 0;
+    const lduInterfacePtrsList& interfaces(lduMatrix.mesh().interfaces());
+
+    // Verify that the permutation has already been computed
+    if(!ldu2csrPerm_)
+    {
+        computePermutation
+        (
+            lduMatrix.lduAddr(),
+            interfaces,
+            nnzExt
+        );
+    }
+    else
+    {
+        forAll(interfaces, patchi)
+        {
+            if (interfaces.set(patchi)) nnzExt += interfaceBouCoeffs[patchi].size();
+        }
+    }
+
+    scalarField foamExtVals(nnzExt, Foam::Zero);
+
+    nnzExt = 0;
+
+    forAll(interfaces, patchi)
+    {
+        if (interfaces.set(patchi))
+        {
+            //- Processor-local values
+            const scalarField& bCoeffs = interfaceBouCoeffs[patchi];
+            const label len = bCoeffs.size();
+
+            SubList<scalar>(foamExtVals, len, nnzExt) = bCoeffs;
+            nnzExt += len;
+        }
+    }
+
+    foamExtVals.negate();
+
+    const scalar * foamDiag = lduMatrix.diag().cdata();
+    const scalar * foamUpper = lduMatrix.upper().cdata();
+    const scalar * foamLower = lduMatrix.lower().cdata();
+
+    label nCells = lduMatrix.diag().size();
+    label nIntFaces = lduMatrix.upper().size();
+    label totNnz = nCells + 2*nIntFaces + nnzExt;
+
+    const scalar * diag = nullptr;
+    const scalar * upper = nullptr;
+    const scalar * lower = nullptr;
+    const scalar * extVals = nullptr;
+
+    std::visit([&foamDiag, &diag, nCells](const auto& exec)
+               { diag = exec.template copyFromFoam<scalar>(nCells, foamDiag); },
+               csrMatExec_);
+    std::visit([&foamUpper, &upper, nIntFaces](const auto& exec)
+               { upper = exec.template copyFromFoam<scalar>(nIntFaces, foamUpper); },
+               csrMatExec_);
+    std::visit([&foamLower, &lower, nIntFaces](const auto& exec)
+               { lower = exec.template copyFromFoam<scalar>(nIntFaces, foamLower); },
+               csrMatExec_);
+    std::visit([&foamExtVals, &extVals, nnzExt](const auto& exec)
+               { extVals = exec.template copyFromFoam<scalar>(nnzExt, foamExtVals.cdata()); },
+               csrMatExec_);
+
+    //- Compute global number of equations
+    nGlobalCells = returnReduce(nCells, sumOp<label>());
+
+    if(!valuesPtr_)
+    {
+        // valuesPtr_ = new scalarField(totNnz);
+        std::visit([this, totNnz](const auto& exec)
+               { this->valuesPtr_ = exec.template alloc<scalar>(totNnz); },
+               csrMatExec_);
+    }
+
+    //- Initialize valuesTmp = [(diag), (upper), (lower), (extValues)]
+    // scalarField valuesTmp(totNnz);
+    scalar* valuesTmp = nullptr;
+    std::visit([&valuesTmp, totNnz](const auto& exec)
+               { valuesTmp = exec.template alloc<scalar>(totNnz); },
+               csrMatExec_);
+
+    initializeValueExt
+    (
+        nCells,
+        nIntFaces,
+        nnzExt,
+        diag,
+        upper,
+        lower,
+        extVals,
+        valuesTmp
+    );
+
+    // Apply permutation
+    applyValuePermutation
+    (
+        totNnz,
+        ldu2csrPerm_,
+        valuesTmp,
+        valuesPtr_
+    );
+
+    std::visit([valuesTmp](const auto& exec)
+               {exec.template clear<scalar>(valuesTmp); },
+               csrMatExec_);
+    std::visit([diag](const auto& exec)
+               {exec.template clear<scalar>(diag); },
+               csrMatExec_);
+    std::visit([upper](const auto& exec)
+               {exec.template clear<scalar>(upper); },
+               csrMatExec_);
+    std::visit([lower](const auto& exec)
+               {exec.template clear<scalar>(lower); },
+               csrMatExec_);
+    std::visit([extVals](const auto& exec)
+               {exec.template clear<scalar>(extVals); },
+               csrMatExec_);
+}
+
+
+// * * * * * * * * * * * * * Explicit instantiations  * * * * * * * * * * * //
 
 // ************************************************************************* //

@@ -29,11 +29,11 @@ License
 
 // ************************************************************************* //
 
-#include "csrAddressing.C"
+#include "csrMatrix.C"
 
-// * * * * * * * * * * * * * * * * CPU Kernels  * * * * * * * * * * * * * * //
+// * * * * * * * * * * * * * * * * * Kernels * * * * * * * * * * * * * * * * //
 
-inline void Foam::csrAddressing::initializeAddressing
+inline void Foam::csrMatrix::initializeAddressing
 (
     const label   nCells,
     const label   nInternalFaces,
@@ -68,11 +68,11 @@ inline void Foam::csrAddressing::initializeAddressing
                                colIndTmp
 					       );
                        },
-     csrAddrExec_);
+     csrMatExec_);
 }
 
 
-inline void Foam::csrAddressing::initializeAddressingExt
+inline void Foam::csrMatrix::initializeAddressingExt
 (
     const label   nCells,
     const label   nInternalFaces,
@@ -116,10 +116,10 @@ inline void Foam::csrAddressing::initializeAddressingExt
                                colIndTmp
 					       );
                        },
-     csrAddrExec_);
+     csrMatExec_);
 }
 
-inline void Foam::csrAddressing::computeSorting
+inline void Foam::csrMatrix::computeSorting
 (
     const label   totNnz,
           label * tmpPerm,
@@ -145,11 +145,11 @@ inline void Foam::csrAddressing::computeSorting
                                ldu2csr
 					       );
                        },
-     csrAddrExec_);
+     csrMatExec_);
 }
 
 
-inline void Foam::csrAddressing::localToGlobalColIndices
+inline void Foam::csrMatrix::localToGlobalColIndices
 (
     const label nRows,
     const label nIntFaces,
@@ -178,11 +178,11 @@ inline void Foam::csrAddressing::localToGlobalColIndices
                                colIndicesGlobal
 					       );
                        },
-     csrAddrExec_);
+     csrMatExec_);
 }
 
 
-inline void Foam::csrAddressing::applyAddressingPermutation
+inline void Foam::csrMatrix::applyAddressingPermutation
 (
     const label   nCells, //NOTE: it is not used but is need for the cuda kernel
     const label   totNnz,
@@ -214,7 +214,105 @@ inline void Foam::csrAddressing::applyAddressingPermutation
                                ownStart
 					       );
                        },
-     csrAddrExec_);
+     csrMatExec_);
+}
+
+inline void Foam::csrMatrix::initializeValue
+(
+    const label   nCells,
+    const label   nIntFaces,
+    const scalar * const diag,
+    const scalar * const upper,
+    const scalar * const lower,
+            scalar * valuesTmp                  
+)
+{
+    std::visit
+	([
+        nCells,
+        nIntFaces,
+        &diag,
+        &upper,
+        &lower,
+        &valuesTmp 
+	 ]
+	 (const auto& exec){ exec.initializeValue
+                           (
+                                nCells,
+                                nIntFaces,
+                                diag,
+                                upper,
+                                lower,
+                                valuesTmp
+					       );
+                       },
+     csrMatExec_);
+}
+
+
+inline void Foam::csrMatrix::initializeValueExt
+(
+    const label nCells,
+    const label nIntFaces,
+    const label nnzExt,
+    const scalar * const diag,
+    const scalar * const upper,
+    const scalar * const lower,
+    const scalar * const extValue,
+          scalar * valuesTmp
+)
+{
+    std::visit
+	([
+        nCells,
+        nIntFaces,
+        nnzExt,
+        &diag,
+        &upper,
+        &lower,
+        &extValue,
+        &valuesTmp 
+	 ]
+	 (const auto& exec){ exec.initializeValueExt
+                           (
+                                nCells,
+                                nIntFaces,
+                                nnzExt,
+                                diag,
+                                upper,
+                                lower,
+                                extValue,
+                                valuesTmp 
+					       );
+                       },
+     csrMatExec_);
+}
+
+
+inline void Foam::csrMatrix::applyValuePermutation
+(
+    const label totNnz,
+    const label  * const ldu2csr,
+    const scalar * const valuesTmp,
+          scalar * values
+)
+{
+    std::visit
+	([
+        totNnz,
+        &ldu2csr,
+        &valuesTmp,
+        &values
+	 ]
+	 (const auto& exec){ exec.applyValuePermutation
+                            (
+                                totNnz,
+                                ldu2csr,
+                                valuesTmp,
+                                values
+					        );
+                       },
+     csrMatExec_);
 }
 
 // * * * * * * * * * * * *  Public Member Functions * * * * * * * * * * * *  //

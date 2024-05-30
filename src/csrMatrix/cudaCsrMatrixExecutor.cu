@@ -5,8 +5,8 @@
     \\  /    A nd           | www.openfoam.com
      \\/     M anipulation  |
 -------------------------------------------------------------------------------
-    Copyright (C) 2011-2017 OpenFOAM Foundation
-    Copyright (C) 2016-2022 OpenCFD Ltd.
+    Copyright (C) 2011-2016 OpenFOAM Foundation
+    Copyright (C) 2017-2022 OpenCFD Ltd.
     Copyright (C) 2022-2023 Cineca
 -------------------------------------------------------------------------------
 License
@@ -27,10 +27,12 @@ License
 
 \*---------------------------------------------------------------------------*/
 
-#include "cudaCsrAddressingExecutor.H"
+// ************************************************************************* //
 
-#include "label.H"
-#include "csrAddressing.H"
+#include "cudaCsrMatrixExecutor.H"
+
+#include "scalar.H"
+#include "csrMatrix.H"
 #include "global.cuh"
 #include <cub/cub.cuh>
 
@@ -186,11 +188,85 @@ void cudaApplyPermutation
     }
 }
 
+__global__
+void cudaInitializeValueD
+(
+    const int   nCells,
+    const double * const diag,
+          double * valuesTmp
+)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
 
-// * * * * * * * * * * * * Public Member Functions * * * * * * * * * * * * * //
+    if(i < nCells)
+    {
+        valuesTmp[i] = diag[i];
+    }
+}
+
+__global__
+void cudaInitializeValueUL
+(
+    const int   nCells,
+    const int   nIntFaces,
+    const double * const upper,
+    const double * const lower,
+          double * valuesTmp
+)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if(i < nIntFaces)
+    {
+        valuesTmp[nCells + i] = upper[i];
+        valuesTmp[nCells + nIntFaces + i] = lower[i];
+    }
+}
+
+__global__
+void cudaInitializeValueExt
+(
+    const int   nCells,
+    const int   nIntFaces,
+    const int   nnzExt,
+    const double * const extValues,
+          double * valuesTmp
+)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if(i < nnzExt)
+    {
+        valuesTmp[nCells + 2*nIntFaces + i] = extValues[i];
+    }
+}
+
+__global__
+void cudaApplyPermutation 
+(
+    const int      length,
+    const int      blockLen,
+    const int    * const permArray,
+    const double * const srcArray,
+          double * dstArray
+)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if(i < length)
+    {
+        dstArray[i] = srcArray[permArray[i / blockLen] + i % blockLen];
+    }
+} 
+//NOTA: this function (when csrAdressing will be joined back to csrMatrix) will 
+//      become e template on the array type to be used both for adressing and 
+//      values permutaiton
+
+
+// * * * * * * * * * * * * * *  Wrapper functions * * * * * * * * * * * * * * //
 
 template<class Type>
-Type* Foam::cudaCsrAddressingExecutor::alloc
+Type* Foam::cudaCsrMatrixExecutor::alloc
 (
     Foam::label size
 ) const
@@ -205,7 +281,7 @@ Type* Foam::cudaCsrAddressingExecutor::alloc
 }
 
 template<class Type>
-const Type* Foam::cudaCsrAddressingExecutor::copyFromFoam
+const Type* Foam::cudaCsrMatrixExecutor::copyFromFoam
 (
     Foam::label size,
 	const Type* hostPtr
@@ -228,7 +304,7 @@ const Type* Foam::cudaCsrAddressingExecutor::copyFromFoam
 }
 
 template<class Type>
-void Foam::cudaCsrAddressingExecutor::clear(Type* ptr) const
+void Foam::cudaCsrMatrixExecutor::clear(Type* ptr) const
 {
     if (ptr)
     {
@@ -237,7 +313,7 @@ void Foam::cudaCsrAddressingExecutor::clear(Type* ptr) const
 }
 
 template<class Type>
-void Foam::cudaCsrAddressingExecutor::clear(const Type* ptr) const
+void Foam::cudaCsrMatrixExecutor::clear(const Type* ptr) const
 {
     if (ptr)
     {
@@ -246,7 +322,7 @@ void Foam::cudaCsrAddressingExecutor::clear(const Type* ptr) const
 }
 
 
-void Foam::cudaCsrAddressingExecutor::initializeAddressing
+void Foam::cudaCsrMatrixExecutor::initializeAddressing
 (
     const Foam::label   nCells,
     const Foam::label   nInternalFaces,
@@ -293,7 +369,7 @@ void Foam::cudaCsrAddressingExecutor::initializeAddressing
     return;
 }
 
-void Foam::cudaCsrAddressingExecutor::initializeAddressingExt
+void Foam::cudaCsrMatrixExecutor::initializeAddressingExt
 (
     const label   nCells,
     const label   nInternalFaces,
@@ -338,7 +414,7 @@ void Foam::cudaCsrAddressingExecutor::initializeAddressingExt
     return;
 }
 
-void Foam::cudaCsrAddressingExecutor::computeSorting
+void Foam::cudaCsrMatrixExecutor::computeSorting
 (
     const label   totNnz,
           label * tmpPerm,
@@ -368,7 +444,7 @@ void Foam::cudaCsrAddressingExecutor::computeSorting
     return;
 }
 
-void Foam::cudaCsrAddressingExecutor::localToGlobalColIndices
+void Foam::cudaCsrMatrixExecutor::localToGlobalColIndices
 (
     const label nRows,
     const label nIntFaces,
@@ -404,7 +480,7 @@ void Foam::cudaCsrAddressingExecutor::localToGlobalColIndices
     return;
 }
 
-void Foam::cudaCsrAddressingExecutor::applyAddressingPermutation
+void Foam::cudaCsrMatrixExecutor::applyAddressingPermutation
 (
     const label   nCells, //NOTE: it is not used but is need for the cuda kernel
     const label   totNnz,
@@ -456,27 +532,133 @@ void Foam::cudaCsrAddressingExecutor::applyAddressingPermutation
     return;
 }
 
-// * * * * * * * * * * * * * Explicit instantiations  * * * * * * * * * * * //
 
-#define makecudaCsrAddressingExecutor(Type)                                   \
-    template Type* Foam::cudaCsrAddressingExecutor::alloc<Type>               \
+void Foam::cudaCsrMatrixExecutor::initializeValue
+(
+    const label    nCells,
+    const label    nIntFaces,
+    const scalar * const diag,
+    const scalar * const upper,
+    const scalar * const lower,
+          scalar * valuesTmp    
+) const
+{
+    label numBlocks;
+    
+    // Initialize valuesTmp = [(diag), (upper), (lower)]
+    numBlocks = (nCells + NUM_THREADS_PER_BLOCK - 1) / NUM_THREADS_PER_BLOCK;
+    cudaInitializeValueD<<<numBlocks, NUM_THREADS_PER_BLOCK>>>
+    (
+        nCells,
+        diag,
+        valuesTmp
+    );
+    
+    numBlocks = (nIntFaces + NUM_THREADS_PER_BLOCK - 1) / NUM_THREADS_PER_BLOCK;
+    cudaInitializeValueUL<<<numBlocks, NUM_THREADS_PER_BLOCK>>>
+    (
+        nCells,
+        nIntFaces,
+        upper,
+        lower,
+        valuesTmp
+    );
+
+    cudaDeviceSynchronize();
+
+    CHECK_LAST_CUDA_ERROR();
+    return;
+}
+
+
+void Foam::cudaCsrMatrixExecutor::initializeValueExt
+(
+    const label    nCells,
+    const label    nIntFaces,
+    const label    nnzExt,
+    const scalar * const diag,
+    const scalar * const upper,
+    const scalar * const lower,
+    const scalar * const extValue,
+          scalar * valuesTmp
+) const
+{
+    // Initialize valuesTmp = [(diag), (upper), (lower), (extValues)]
+    initializeValue
+    (
+        nCells,
+        nIntFaces,
+        diag,
+        upper,
+        lower,
+        valuesTmp
+    );
+
+    int numBlocks = (nnzExt + NUM_THREADS_PER_BLOCK - 1) / NUM_THREADS_PER_BLOCK;
+    cudaInitializeValueExt<<<numBlocks, NUM_THREADS_PER_BLOCK>>>
+    (
+        nCells,
+        nIntFaces,
+        nnzExt,
+        extValue,
+        valuesTmp
+    );
+
+    cudaDeviceSynchronize();
+
+    CHECK_LAST_CUDA_ERROR();
+    return;
+}
+
+
+void Foam::cudaCsrMatrixExecutor::applyValuePermutation
+(
+    const label    totNnz,
+    const label  * const ldu2csr,
+    const scalar * const valuesTmp,
+          scalar * values,
+    const label    nBlocks
+) const
+{
+    int blockLen = nBlocks*nBlocks;
+    int numBlocks = (totNnz + NUM_THREADS_PER_BLOCK - 1) / NUM_THREADS_PER_BLOCK;
+    cudaApplyPermutation<<<numBlocks, NUM_THREADS_PER_BLOCK>>>
+    (
+        totNnz,
+        blockLen,
+        ldu2csr,
+        valuesTmp,
+        values
+    );
+
+    cudaDeviceSynchronize();
+
+    CHECK_LAST_CUDA_ERROR();
+    return;
+}
+
+// * * * * * * * * * * * * * Explicit instantiations  * * * * * * * * * * *  //
+
+#define makecudaCsrMatrixExecutor(Type)                                   \
+    template Type* Foam::cudaCsrMatrixExecutor::alloc<Type>               \
     (                                                                         \
         Foam::label size                                                      \
     ) const;                                                                  \
-    template const Type* Foam::cudaCsrAddressingExecutor::copyFromFoam<Type>  \
+    template const Type* Foam::cudaCsrMatrixExecutor::copyFromFoam<Type>  \
     (                                                                         \
         Foam::label size,                                                     \
         const Type* hostPtr                                                   \
     ) const;                                                                  \
-    template void  Foam::cudaCsrAddressingExecutor::clear<Type>               \
+    template void  Foam::cudaCsrMatrixExecutor::clear<Type>               \
     (                                                                         \
         Type* ptr                                                             \
     ) const;                                                                  \
-    template void  Foam::cudaCsrAddressingExecutor::clear<Type>               \
+    template void  Foam::cudaCsrMatrixExecutor::clear<Type>               \
     (                                                                         \
         const Type* ptr                                                       \
     ) const;
 
-makecudaCsrAddressingExecutor(Foam::label)
-makecudaCsrAddressingExecutor(Foam::scalar)
+makecudaCsrMatrixExecutor(Foam::label)
+makecudaCsrMatrixExecutor(Foam::scalar)
 
+// ************************************************************************* //

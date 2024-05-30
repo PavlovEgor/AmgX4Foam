@@ -5,8 +5,8 @@
     \\  /    A nd           | www.openfoam.com
      \\/     M anipulation  |
 -------------------------------------------------------------------------------
-    Copyright (C) 2011-2017 OpenFOAM Foundation
-    Copyright (C) 2016-2022 OpenCFD Ltd.
+    Copyright (C) 2011-2016 OpenFOAM Foundation
+    Copyright (C) 2017-2022 OpenCFD Ltd.
     Copyright (C) 2022-2023 Cineca
 -------------------------------------------------------------------------------
 License
@@ -27,16 +27,16 @@ License
 
 \*---------------------------------------------------------------------------*/
 
-#include "cpuCsrAddressingExecutor.H"
-#include "csrAddressing.H"
+// ************************************************************************* //
+
+#include "cpuCsrMatrixExecutor.H"
 #include <cmath>
 #include <bits/stdc++.h>
 
-// * * * * * * * * * * * * Public Member Functions * * * * * * * * * * * * * //
-
+// * * * * * * * * * * * * * * * * Member functions * * * * * * * * * * * * * //
 
 template<class Type>
-Type* Foam::cpuCsrAddressingExecutor::alloc
+Type* Foam::cpuCsrMatrixExecutor::alloc
 (
     Foam::label size
 ) const
@@ -46,7 +46,7 @@ Type* Foam::cpuCsrAddressingExecutor::alloc
 }
 
 template<class Type>
-const Type* Foam::cpuCsrAddressingExecutor::copyFromFoam
+const Type* Foam::cpuCsrMatrixExecutor::copyFromFoam
 (
     Foam::label size,
 	const Type* hostPtr
@@ -57,17 +57,17 @@ const Type* Foam::cpuCsrAddressingExecutor::copyFromFoam
 }
 
 template<class Type>
-void Foam::cpuCsrAddressingExecutor::clear(Type* ptr) const
+void Foam::cpuCsrMatrixExecutor::clear(Type* ptr) const
 {
     delete ptr;
 }
 
 template<class Type>
-void Foam::cpuCsrAddressingExecutor::clear(const Type* ptr) const
+void Foam::cpuCsrMatrixExecutor::clear(const Type* ptr) const
 {
 }
 
-void Foam::cpuCsrAddressingExecutor::initializeAddressing
+void Foam::cpuCsrMatrixExecutor::initializeAddressing
 (
     const Foam::label   nCells,
     const Foam::label   nInternalFaces,
@@ -107,7 +107,7 @@ void Foam::cpuCsrAddressingExecutor::initializeAddressing
     return;
 }
 
-void Foam::cpuCsrAddressingExecutor::initializeAddressingExt
+void Foam::cpuCsrMatrixExecutor::initializeAddressingExt
 (
     const label   nCells,
     const label   nInternalFaces,
@@ -143,7 +143,7 @@ void Foam::cpuCsrAddressingExecutor::initializeAddressingExt
     return;
 }
 
-void Foam::cpuCsrAddressingExecutor::computeSorting
+void Foam::cpuCsrMatrixExecutor::computeSorting
 (
     const label   totNnz,
           label * tmpPerm,
@@ -171,7 +171,7 @@ void Foam::cpuCsrAddressingExecutor::computeSorting
 }
 
 
-void Foam::cpuCsrAddressingExecutor::localToGlobalColIndices
+void Foam::cpuCsrMatrixExecutor::localToGlobalColIndices
 (
     const label nRows,
     const label nIntFaces,
@@ -194,7 +194,7 @@ void Foam::cpuCsrAddressingExecutor::localToGlobalColIndices
 }
 
 
-void Foam::cpuCsrAddressingExecutor::applyAddressingPermutation
+void Foam::cpuCsrMatrixExecutor::applyAddressingPermutation
 (
     const label   nCells, //NOTE: it is not used but is need for the cuda kernel
     const label   totNnz,
@@ -221,28 +221,104 @@ void Foam::cpuCsrAddressingExecutor::applyAddressingPermutation
     ownStart[nCells] = totNnz;
 }
 
-// * * * * * * * * * * * * * Explicit instantiations  * * * * * * * * * * * //
 
-#define makecpuCsrAddressingExecutor(Type)                                    \
-    template Type* Foam::cpuCsrAddressingExecutor::alloc<Type>                \
+void Foam::cpuCsrMatrixExecutor::initializeValue
+(
+    const label   nCells,
+    const label   nIntFaces,
+    const scalar * const diag,
+    const scalar * const upper,
+    const scalar * const lower,
+          scalar * valuesTmp
+) const
+{
+    for(label i=0; i<nCells; ++i)
+    {
+        valuesTmp[i] = diag[i];
+    }
+
+    for(label i=0; i<nIntFaces; ++i)
+    {
+        valuesTmp[nCells + i] = upper[i];
+        valuesTmp[nCells + nIntFaces + i] = lower[i];
+    }
+}
+
+
+void Foam::cpuCsrMatrixExecutor::initializeValueExt
+(
+    const label   nCells,
+    const label   nIntFaces,
+    const label   nnzExt,
+    const scalar * const diag,
+    const scalar * const upper,
+    const scalar * const lower,
+    const scalar * const extValue,
+          scalar * valuesTmp
+) const
+{
+    // Initialize valuesTmp = [(diag), (upper), (lower), (extValues)]
+
+    initializeValue
+    (
+        nCells,
+        nIntFaces,
+        diag,
+        upper,
+        lower,
+        valuesTmp
+    );
+
+    for(label i=0; i<nnzExt; ++i)
+    {
+        valuesTmp[nCells + 2*nIntFaces + i] = extValue[i];
+    }
+}
+
+void Foam::cpuCsrMatrixExecutor::applyValuePermutation
+(
+    const label    totNnz,
+    const label *  const ldu2csr,
+    const scalar * const valuesTmp,
+          scalar * values,
+    const label    nBlocks
+) const
+{
+    label blockLen = nBlocks * nBlocks;
+    
+    for(label i=0; i<totNnz; ++i)
+    {
+        for(label j=0; j<blockLen; ++j)
+        {
+            values[i*blockLen + j] = valuesTmp[ldu2csr[i]*blockLen + j];
+        }
+    }
+}
+
+// * * * * * * * * * * * *  Public Member Functions * * * * * * * * * * * *  //
+
+// * * * * * * * * * * * * * Explicit instantiations  * * * * * * * * * * *  //
+
+#define makecpuCsrMatrixExecutor(Type)                                    \
+    template Type* Foam::cpuCsrMatrixExecutor::alloc<Type>                \
     (                                                                         \
         Foam::label size                                                      \
     ) const;                                                                  \
-    template const Type* Foam::cpuCsrAddressingExecutor::copyFromFoam<Type>   \
+    template const Type* Foam::cpuCsrMatrixExecutor::copyFromFoam<Type>   \
     (                                                                         \
         Foam::label size,                                                     \
         const Type* hostPtr                                                   \
     ) const;                                                                  \
-    template void  Foam::cpuCsrAddressingExecutor::clear<Type>                \
+    template void  Foam::cpuCsrMatrixExecutor::clear<Type>                \
     (                                                                         \
         Type* ptr                                                             \
     ) const;                                                                  \
-    template void  Foam::cpuCsrAddressingExecutor::clear<Type>                \
+    template void  Foam::cpuCsrMatrixExecutor::clear<Type>                \
     (                                                                         \
         const Type* ptr                                                       \
     ) const;
 
-makecpuCsrAddressingExecutor(Foam::label)
-makecpuCsrAddressingExecutor(Foam::scalar)
-// ************************************************************************* //
+makecpuCsrMatrixExecutor(Foam::label)
+makecpuCsrMatrixExecutor(Foam::scalar)
 
+// ************************************************************************* //

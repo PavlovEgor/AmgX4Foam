@@ -257,7 +257,7 @@ void Foam::AmgXWrapper::finalize()
 void Foam::AmgXWrapper::setOperator
 (
     const label nGlobalRows,
-    const csrAddressing* matrix
+    const csrMatrix* matrix
 )
 {
     const label nLocalRows = matrix->nOwnerStart() - 1;
@@ -353,7 +353,7 @@ void Foam::AmgXWrapper::setOperator
 /* \implements AmgXWrapper::updateOperator */
 void Foam::AmgXWrapper::updateOperator
 (
-    const csrAddressing* matrix
+    const csrMatrix* matrix
 )
 {
     const label nLocalRows = matrix->nOwnerStart() - 1;
@@ -373,7 +373,7 @@ void Foam::AmgXWrapper::solve
 (
     scalar* pscalar,
     const scalar* bscalar,
-    const csrAddressing* matrix
+    const csrMatrix* matrix
 )
 {
     const label nLocalRows = matrix->nOwnerStart() - 1;

@@ -2,12 +2,9 @@ global.cu
 AmgX/AmgXLinearSolverContext.C
 AmgX/AmgXSolver.C
 AmgX/AmgXWrapper.C
-ldu2Csr/csrAddressing/csrAddressingFunctions.C
-ldu2Csr/csrAddressing/cpuCsrAddressingExecutor.C
-ldu2Csr/csrAddressing/cudaCsrAddressingExecutor.cu
-ldu2Csr/csrMatrix/csrMatrixFunctions.C
-ldu2Csr/csrMatrix/cpuCsrMatrixExecutor.C
-ldu2Csr/csrMatrix/cudaCsrMatrixExecutor.cu
+csrMatrix/csrMatrixFunctions.C
+csrMatrix/cpuCsrMatrixExecutor.C
+csrMatrix/cudaCsrMatrixExecutor.cu
 utility/linearSolverContextTable.C
 
 LIB = $(FOAM_USER_LIBBIN)/libEscapeFromFoam

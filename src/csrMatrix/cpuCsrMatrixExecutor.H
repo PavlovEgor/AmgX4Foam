@@ -27,21 +27,23 @@ License
 
 
 Class
-    cudaCsrMatrixExecutor
+    cpuCsrMatrixExecutor
 
 Description
-    cuda visitor of the csrMatrix class
+    cpu visitor of the csrMatrix class
 
 SourceFiles
-    cudaCsrMatrixExecutor.H
-    cudaCsrMatrixExecutor.cu
+    cpuCsrMatrixExecutor.H
+    cpuCsrMatrixExecutor.C
 
 \*---------------------------------------------------------------------------*/
 
-#ifndef cuda_CsrMatrix_Executor_H
-#define cuda_CsrMatrix_Executor_H
+
+#ifndef cpu_csrMatrix_Executor_H
+#define cpu_csrMatrix_Executor_H
 
 #include "scalar.H"
+#include "label.H"
 
 namespace Foam
 {
@@ -49,18 +51,87 @@ namespace Foam
 // Forward Declarations
 class csrMatrix;
 
-class cudaCsrMatrixExecutor
+class cpuCsrMatrixExecutor
 {
 public:
 
-    cudaCsrMatrixExecutor() {};
+    cpuCsrMatrixExecutor() {};
 
-    ~cudaCsrMatrixExecutor() {};
+    ~cpuCsrMatrixExecutor() {};
+
+    template<class Type>
+    Type* alloc(Foam::label size) const;
+
+    template<class Type>
+    const Type* copyFromFoam(Foam::label size, const Type* hostPtr) const;
+
+    template<class Type>
+    void clear(Type* ptr) const;
+
+    template<class Type>
+    void clear(const Type* ptr) const;
+
+    void initializeAddressing
+    (
+        const label   nCells,
+        const label   nInternalFaces,
+        const label   totNnz,
+        const label * const owner,
+        const label * const neighbour,
+              label * tmpPerm,
+              label * rowIndTmp,
+              label * colIndTmp
+    ) const;
+
+    void initializeAddressingExt
+    (
+        const label   nCells,
+        const label   nInternalFaces,
+        const label   nnzExt,
+        const label   totNnz,
+        const label * const owner,
+        const label * const neighbour,
+        const label * const extRows,
+        const label * const extCols,
+              label * tmpPerm,
+              label * rowIndTmp,
+              label * colIndTmp
+    ) const;
+
+    void computeSorting
+    (
+        const label   totNnz,
+              label * tmpPerm,
+              label * rowIndTmp,
+              label * rowInd,
+              label * ldu2csr
+    ) const;
+
+    void localToGlobalColIndices
+    (
+        const label   nRows,
+        const label   nIntFaces,
+        const label   diagIndexGlobal,
+        const label   lowOffGlobal,
+        const label   uppOffGlobal,
+              label * colIndicesGlobal
+    ) const;
+
+    void applyAddressingPermutation
+    (
+        const label   nCells,
+        const label   totNnz,
+        const label * const ldu2csr,
+        const label * const colIndTmp,
+        const label * const rowInd,
+              label * colInd,
+              label * ownStart
+    ) const;
 
     void initializeValue
     (
-        const label   nCells,
-        const label   nIntFaces,
+        const label    nCells,
+        const label    nIntFaces,
         const scalar * const diag,
         const scalar * const upper,
         const scalar * const lower,

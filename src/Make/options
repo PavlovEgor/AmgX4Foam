@@ -4,8 +4,7 @@ EXE_INC = \
     -I$(FOAM_SRC)/Pstream/mpi \
     -I. \
     -I$(AMGX_INC) \
-    -Ildu2csr/csrAddressing \
-    -Ildu2csr/csrMatrix \
+    -IcsrMatrix \
     -Iutility \
     -IAmgX
 

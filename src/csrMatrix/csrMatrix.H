@@ -43,7 +43,6 @@ SourceFiles
 #include "Enum.H"
 #include "scalar.H"
 #include "lduMatrix.H"
-#include "csrAddressing.H"
 #include "csrMatrixExecutor.H"
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
@@ -60,10 +59,13 @@ class csrMatrix;
 \*---------------------------------------------------------------------------*/
 
 class csrMatrix
-:
-    public csrAddressing
 {
-    // Private Data
+    //- Private Data
+
+    //- Private methods
+
+protected:
+    //- Protected Data
 
         //- Data executor
         csrMatrixExecutor csrMatExec_;
@@ -71,9 +73,82 @@ class csrMatrix
         //- Coefficients
         scalar *valuesPtr_;
 
+        //- Number of blocks
+        label nBlocks_ = 1;
 
-    // Private methods
-           
+        //- Number of local rows
+        label nOwnerStart_ = 0;
+
+        //- Number of local Nz
+        label nLocalNz_ = 0;
+
+        //- Numbers of non-zeros per row
+        label* ownerStartPtr_;
+
+        //- Column indices array
+        label* colIndicesPtr_;
+
+        //- Permutation ldu2csr array
+        label* ldu2csrPerm_;
+
+    //- Protected functions
+        void initializeAddressing
+        (
+            const label   nCells,
+            const label   nInternalFaces,
+            const label   totNnz,
+            const label * const owner,
+            const label * const neighbour,
+                  label * tmpPerm,
+                  label * rowIndTmp,
+                  label * colIndTmp
+        );
+
+        void initializeAddressingExt
+        (
+            const label   nCells,
+            const label   nInternalFaces,
+            const label   nnzExt,
+            const label   totNnz,
+            const label * const owner,
+            const label * const neighbour,
+            const label * const extRows,
+            const label * const extCols,
+                  label * tmpPerm,
+                  label * rowIndTmp,
+                  label * colIndTmp
+        );
+
+        void computeSorting
+        (
+            const label   totNnz,
+                  label * tmpPerm,
+                  label * rowIndTmp,
+                  label * rowInd,
+                  label * ldu2csr
+        );
+
+        void localToGlobalColIndices
+        (
+            const label   nRows,
+            const label   nIntFaces,
+            const label   diagIndexGlobal,
+            const label   lowOffGlobal,
+            const label   uppOffGlobal,
+                  label * colIndicesGlobal
+        );
+
+        void applyAddressingPermutation
+        (
+            const label   nCells,
+            const label   totNnz,
+            const label * const ldu2csr,
+            const label * const colIndTmp,
+            const label * const rowInd,
+                  label * colInd,
+                  label * ownStart
+        );
+
         void initializeValue
         (
             const label   nCells,
@@ -104,19 +179,30 @@ class csrMatrix
                   scalar * values
         );
 
+        //- Computation of the permutatrion array
+        void computePermutation(const lduAddressing * addr);
+
+        //- Computation of the permutatrion array
+        void computePermutation
+        (
+            const lduAddressing& addr,
+            const lduInterfacePtrsList& interfaces,
+                  label& nExtNz
+        );
+
 public:
 
     //- Public Types
 
     //- Static Data
 
-        // Declare name of the class and its debug switch
+        //- Declare name of the class and its debug switch
         ClassName("csrMatrix");
 
     //- Constructors
 
         //- Construct default.
-        //  The coefficients are initialized empty.
+        //- The coefficients are initialized empty.
         csrMatrix(word mode);
 
 //        //- Construct as copy
@@ -136,8 +222,51 @@ public:
 
     //- Member Functions
 
+        //- Access to addressing
+
+            //- Number of blocks
+            label nBlocks() const
+            {
+                return nBlocks_;
+            }
+
+            //- Number of local rows
+            label nOwnerStart() const
+            {
+                return nOwnerStart_;
+            }
+            //- Number of blocks
+            label nLocalNz() const
+            {
+                return nLocalNz_;
+            }
+
+            //- Return vector of the ownerStart
+            const label* ownerStart() const
+            {
+                return ownerStartPtr_;
+            }
+
+            //- Return the column index
+            const label* colIndices() const
+            {
+                return colIndicesPtr_;
+            }
+
+            //- Return the column index
+            const label* ldu2csrPerm() const
+            {
+                return ldu2csrPerm_;
+            }
+
+            //- Return true if the permutation has been computed
+            bool hasPermutation() const noexcept
+            {
+                return (ldu2csrPerm_);
+            }
+
         //- Access to coefficients
-            virtual const scalar* values() const;
+            const scalar* values() const;
 
             bool hasValues() const noexcept
             {
@@ -145,6 +274,15 @@ public:
             }
 
         //- Operations
+
+            //- Set number of blocks
+            void setNblocks(label n)
+            {
+                nBlocks_ = n;
+            }
+
+            //- Deallocate useless addressing pointer
+            void clearAddressing();
 
             //- Apply permutation from LDU to CSR
             void applyPermutation(const lduMatrix& lduMatrix);
