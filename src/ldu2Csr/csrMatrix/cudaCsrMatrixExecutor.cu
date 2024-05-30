@@ -92,16 +92,17 @@ __global__
 void cudaApplyPermutation 
 (
     const int      length,
+    const int      blockLen,
     const int    * const permArray,
     const double * const srcArray,
-          double *       dstArray
+          double * dstArray
 )
 {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
 
     if(i < length)
     {
-        dstArray[i] = srcArray[permArray[i]];
+        dstArray[i] = srcArray[permArray[i / blockLen] + i % blockLen];
     }
 } 
 //NOTA: this function (when csrAdressing will be joined back to csrMatrix) will 
@@ -194,13 +195,16 @@ void Foam::cudaCsrMatrixExecutor::applyValuePermutation
     const label    totNnz,
     const label  * const ldu2csr,
     const scalar * const valuesTmp,
-          scalar * values
+          scalar * values,
+    const label    nBlocks
 ) const
 {
+    int blockLen = nBlocks*nBlocks;
     int numBlocks = (totNnz + NUM_THREADS_PER_BLOCK - 1) / NUM_THREADS_PER_BLOCK;
     cudaApplyPermutation<<<numBlocks, NUM_THREADS_PER_BLOCK>>>
     (
         totNnz,
+        blockLen,
         ldu2csr,
         valuesTmp,
         values

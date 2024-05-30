@@ -90,15 +90,21 @@ void Foam::cpuCsrMatrixExecutor::initializeValueExt
 
 void Foam::cpuCsrMatrixExecutor::applyValuePermutation
 (
-    const label   totNnz,
-    const label * const ldu2csr,
+    const label    totNnz,
+    const label *  const ldu2csr,
     const scalar * const valuesTmp,
-          scalar * values
+          scalar * values,
+    const label    nBlocks
 ) const
 {
+    label blockLen = nBlocks * nBlocks;
+    
     for(label i=0; i<totNnz; ++i)
     {
-        values[i] = valuesTmp[ldu2csr[i]];
+        for(label j=0; j<blockLen; ++j)
+        {
+            values[i*blockLen + j] = valuesTmp[ldu2csr[i]*blockLen + j];
+        }
     }
 }
 

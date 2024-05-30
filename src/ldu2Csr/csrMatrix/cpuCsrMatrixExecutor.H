@@ -60,8 +60,8 @@ public:
 
     void initializeValue
     (
-        const label   nCells,
-        const label   nIntFaces,
+        const label    nCells,
+        const label    nIntFaces,
         const scalar * const diag,
         const scalar * const upper,
         const scalar * const lower,
@@ -70,25 +70,24 @@ public:
 
     void initializeValueExt
     (
-        const label      nCells,
-        const label      nIntFaces,
-        const label      nnzExt,
+        const label    nCells,
+        const label    nIntFaces,
+        const label    nnzExt,
         const scalar * const diag,
         const scalar * const upper,
         const scalar * const lower,
         const scalar * const extValue,
-                scalar * valuesTmp
+              scalar * valuesTmp
     ) const;
 
     void applyValuePermutation
     (
-        const label totNnz,
+        const label    totNnz,
         const label  * const ldu2csr,
         const scalar * const valuesTmp,
-              scalar * values
+              scalar * values,
+        const label    nBlocks = 1
     ) const;
-
-
 };
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //

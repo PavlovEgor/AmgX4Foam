@@ -84,9 +84,9 @@ public:
         const label    totNnz,
         const label  * const ldu2csr,
         const scalar * const valuesTmp,
-              scalar * values
+              scalar * values,
+        const label    nBlocks = 1
     ) const;
-
 };
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
