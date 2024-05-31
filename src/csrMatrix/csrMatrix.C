@@ -28,64 +28,109 @@ License
 
 #include "csrMatrix.H"
 
+#include "globalIndex.H"
+
 // * * * * * * * * * * * * * * Static Data Members * * * * * * * * * * * * * //
-
-
 
 // * * * * * * * * * * * * * * * Constructors * * * * * * * * * * * * * * * //
 
-Foam::csrMatrix::csrMatrix()
+Foam::csrMatrix::csrMatrix(word mode)
 :
-    csrAdressing(),
-    valuesPtr_(nullptr)
-{}
-
-Foam::csrMatrix::csrMatrix(const csrMatrix& A)
-:
-    csrAdressing(A),
+    ownerStartPtr_(nullptr),
+    colIndicesPtr_(nullptr),
+    ldu2csrPerm_(nullptr),
     valuesPtr_(nullptr)
 {
-    if (A.valuesPtr_)
+    if (mode.starts_with("h"))
     {
-        valuesPtr_ = new scalarField(*(A.valuesPtr_));
-    }
-}
-
-
-Foam::csrMatrix::csrMatrix(csrMatrix& A, bool reuse)
-:
-    csrAdressing(A, reuse),
-    valuesPtr_(nullptr)
-{
-    if (reuse)
+        csrMatExec_ = cpuCsrMatrixExecutor();
+	}
+#ifdef have_cuda    
+    else if (mode.starts_with("d"))
     {
-        if (A.valuesPtr_)
-        {
-            valuesPtr_ = A.valuesPtr_;
-            A.valuesPtr_ = nullptr;
-        }
-    }
+        csrMatExec_ = cudaCsrMatrixExecutor();
+	}
+#endif
     else
     {
-        if (A.valuesPtr_)
-        {
-            valuesPtr_ = new scalarField(*(A.valuesPtr_));
-        }
+        FatalErrorInFunction
+            << "'" << mode << "' is not a valid AMGx execution mode"
+            << exit(FatalError);
     }
 }
+
+//Foam::csrMatrix::csrMatrix(const csrMatrix& A)
+//:
+//    csrMatrix(A),
+//    valuesPtr_(nullptr)
+//{
+//    if (A.valuesPtr_)
+//    {
+//        valuesPtr_ = new scalarField(*(A.valuesPtr_));
+//    }
+//}
+//
+//
+//Foam::csrMatrix::csrMatrix(csrMatrix& A, bool reuse)
+//:
+//    csrMatrix(A, reuse),
+//    valuesPtr_(nullptr)
+//{
+//    if (reuse)
+//    {
+//        if (A.valuesPtr_)
+//        {
+//            valuesPtr_ = A.valuesPtr_;
+//            A.valuesPtr_ = nullptr;
+//        }
+//    }
+//    else
+//    {
+//        if (A.valuesPtr_)
+//        {
+//            valuesPtr_ = new scalarField(*(A.valuesPtr_));
+//        }
+//    }
+//}
 
 // * * * * * * * * * * * *  Public Member Functions * * * * * * * * * * * *  //
 
 void Foam::csrMatrix::finalize()
 {
+    // NOTA: Implementare controllo con buleano o invalidazione del puntatore
+    //       per gestire bene la finalizzazione
+    
+    if (ownerStartPtr_)
+    {
+        // delete ownerStartPtr_;
+        std::visit([this](const auto& exec)
+               {exec.template clear<label>(this->ownerStartPtr_); }, csrMatExec_);
+    }
+
+    if (colIndicesPtr_)
+    {
+        // delete colIndicesPtr_;
+        std::visit([this](const auto& exec)
+               {exec.template clear<label>(this->colIndicesPtr_); }, csrMatExec_);
+    }
+
+    if (ldu2csrPerm_)
+    {
+        //delete ldu2csrPerm_;
+        std::visit([this](const auto& exec)
+               {exec.template clear<label>(this->ldu2csrPerm_); }, csrMatExec_);
+    }
+
     if (valuesPtr_)
     {
-        delete valuesPtr_;
+        // delete valuesPtr_;
+        std::visit([this](const auto& exec)
+                {exec.template clear<scalar>(this->valuesPtr_); }, csrMatExec_);
     }
 }
 
 
-const Foam::scalarField& Foam::csrMatrix::values() const
+const Foam::scalar* Foam::csrMatrix::values() const
 {
     if (!valuesPtr_)
     {
@@ -94,7 +139,7 @@ const Foam::scalarField& Foam::csrMatrix::values() const
             << abort(FatalError);
     }
 
-    return *valuesPtr_;
+    return valuesPtr_;
 }
 
 
@@ -136,21 +181,42 @@ void Foam::csrMatrix::applyPermutation(const lduMatrix& lduMatrix)
         computePermutation(&(lduMatrix.lduAddr()));
     }
 
-    const scalarField& diag = lduMatrix.diag();
-    const scalarField& upper = lduMatrix.upper();
-    const scalarField& lower = lduMatrix.lower();
+    const scalar * foamDiag = lduMatrix.diag().cdata();
+    const scalar * foamUpper = lduMatrix.upper().cdata();
+    const scalar * foamLower = lduMatrix.lower().cdata();
 
-    label nCells = diag.size();
-    label nIntFaces = upper.size();
+    label nCells = lduMatrix.diag().size();
+    label nIntFaces = lduMatrix.upper().size();
     label totNnz = nCells + 2*nIntFaces;
+
+    const scalar * diag = nullptr;
+    const scalar * upper = nullptr;
+    const scalar * lower = nullptr;
+
+    std::visit([&foamDiag, &diag, nCells](const auto& exec)
+               { diag = exec.template copyFromFoam<scalar>(nCells, foamDiag); },
+               csrMatExec_);
+    std::visit([&foamUpper, &upper, nIntFaces](const auto& exec)
+               { upper = exec.template copyFromFoam<scalar>(nIntFaces, foamUpper); },
+               csrMatExec_);
+    std::visit([&foamLower, &lower, nIntFaces](const auto& exec)
+               { lower = exec.template copyFromFoam<scalar>(nIntFaces, foamLower); },
+               csrMatExec_);
 
     if(!valuesPtr_)
     {
-        valuesPtr_ = new scalarField(totNnz);
+        // valuesPtr_ = new scalarField(totNnz);
+        std::visit([this, totNnz](const auto& exec)
+               { this->valuesPtr_ = exec.template alloc<scalar>(totNnz); },
+               csrMatExec_);
     }
 
     // Initialize valuesTmp = [(diag), (upper), (lower)]
-    scalarField valuesTmp(totNnz);
+    // scalarField valuesTmp(totNnz);
+    scalar* valuesTmp = nullptr;
+    std::visit([&valuesTmp, totNnz](const auto& exec)
+               { valuesTmp = exec.template alloc<scalar>(totNnz); },
+               csrMatExec_);
 
     initializeValue
     (
@@ -168,10 +234,14 @@ void Foam::csrMatrix::applyPermutation(const lduMatrix& lduMatrix)
     applyValuePermutation
     (
         totNnz,
-        ldu2csrPerm_->cdata(),
-        valuesTmp.cdata(),
-        valuesPtr_->data()
+        ldu2csrPerm_,
+        valuesTmp,
+        valuesPtr_
     );
+
+    std::visit([valuesTmp](const auto& exec)
+               {exec.template clear<scalar>(valuesTmp); },
+               csrMatExec_);
 }
 
 
@@ -204,7 +274,7 @@ void Foam::csrMatrix:: applyPermutation
         }
     }
 
-    scalarField extVals(nnzExt, Foam::Zero);
+    scalarField foamExtVals(nnzExt, Foam::Zero);
 
     nnzExt = 0;
 
@@ -216,20 +286,38 @@ void Foam::csrMatrix:: applyPermutation
             const scalarField& bCoeffs = interfaceBouCoeffs[patchi];
             const label len = bCoeffs.size();
 
-            SubList<scalar>(extVals, len, nnzExt) = bCoeffs;
+            SubList<scalar>(foamExtVals, len, nnzExt) = bCoeffs;
             nnzExt += len;
         }
     }
 
-    extVals.negate();
+    foamExtVals.negate();
 
-    const scalarField& diag = lduMatrix.diag();
-    const scalarField& upper = lduMatrix.upper();
-    const scalarField& lower = lduMatrix.lower();
+    const scalar * foamDiag = lduMatrix.diag().cdata();
+    const scalar * foamUpper = lduMatrix.upper().cdata();
+    const scalar * foamLower = lduMatrix.lower().cdata();
 
     label nIntFaces = upper.size();
     label nCells = diag.size();
     label totNnz;
+
+    const scalar * diag = nullptr;
+    const scalar * upper = nullptr;
+    const scalar * lower = nullptr;
+    const scalar * extVals = nullptr;
+
+    std::visit([&foamDiag, &diag, nCells](const auto& exec)
+               { diag = exec.template copyFromFoam<scalar>(nCells, foamDiag); },
+               csrMatExec_);
+    std::visit([&foamUpper, &upper, nIntFaces](const auto& exec)
+               { upper = exec.template copyFromFoam<scalar>(nIntFaces, foamUpper); },
+               csrMatExec_);
+    std::visit([&foamLower, &lower, nIntFaces](const auto& exec)
+               { lower = exec.template copyFromFoam<scalar>(nIntFaces, foamLower); },
+               csrMatExec_);
+    std::visit([&foamExtVals, &extVals, nnzExt](const auto& exec)
+               { extVals = exec.template copyFromFoam<scalar>(nnzExt, foamExtVals.cdata()); },
+               csrMatExec_);
 
     //- Compute global number of equations
     nGlobalCells = returnReduce(nCells, sumOp<label>());

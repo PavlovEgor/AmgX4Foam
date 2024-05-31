@@ -31,8 +31,9 @@ License
 
 #include "PstreamGlobals.H"
 
-// #include <iostream>
-// #include <fstream>
+#include "global.cuh"
+#include <iostream>
+#include <fstream>
 
 // initialize AmgXWrapper::count to 0
 int Foam::AmgXWrapper::count = 0;
@@ -357,7 +358,7 @@ void Foam::AmgXWrapper::finalize()
 void Foam::AmgXWrapper::setOperator
 (
     const label nGlobalRows,
-    const csrAdressing* matrix
+    const csrMatrix* matrix
 )
 {
     if(gpuProc_)
@@ -480,7 +481,7 @@ void Foam::AmgXWrapper::setOperator
 /* \implements AmgXWrapper::updateOperator */
 void Foam::AmgXWrapper::updateOperator
 (
-    const csrAdressing* matrix
+    const csrMatrix* matrix
 )
 {
     if(gpuProc_)
@@ -504,7 +505,7 @@ void Foam::AmgXWrapper::solve
     const int nLocalRows,
     scalar* pscalar,
     const scalar* bscalar,
-    const csrAdressing* matrix
+    const csrMatrix* matrix
 )
 {    
     scalar * p;

@@ -159,11 +159,13 @@ public:
         AmgXLinearSolverContext(const word eqName, const fileName& optionsFile, const dictionary solverDict)
         :
             linearSolverContext(eqName),
-            loaded_(false)
+            loaded_(false),
+			Amat_(solverDict.get<word>("mode"))
         {
             int err = 0;
 
             word mode = "dDDI";
+            //word mode = solverDict.get<word>("mode");
             word dataLocation = solverDict.get<word>("dataLocation");
 
             if (isFile(optionsFile))
@@ -204,9 +206,11 @@ public:
         AmgXLinearSolverContext(const word eqName, const dictionary solverDict)
         :
             linearSolverContext(eqName),
-            loaded_(false)
+            loaded_(false),
+			Amat_(solverDict.get<word>("mode"))
         {
             word mode = "dDDI";
+            //word mode = solverDict.get<word>("mode");
             word dataLocation =solverDict.get<word>("dataLocation");
 
             string configStr = writeConfigurationString(solverDict.subDict("AmgXconfig"));

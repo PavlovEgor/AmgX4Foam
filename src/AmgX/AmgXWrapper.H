@@ -52,7 +52,7 @@ SourceFiles
 #include "scalar.H"
 #include "label.H"
 #include "IOstreams.H"
-#include "csrAdressing.H"
+#include "csrMatrix.H"
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
@@ -140,7 +140,7 @@ class AmgXWrapper
         void setOperator
         (
             const label nGlobalRows,
-            const csrAdressing* matrix
+            const csrMatrix* matrix
         );
 
 
@@ -157,7 +157,7 @@ class AmgXWrapper
          */
         void updateOperator
         (
-            const csrAdressing* matrix
+            const csrMatrix* matrix
         );
 
 
@@ -179,7 +179,7 @@ class AmgXWrapper
             const int nLocalRows,
             scalar* pscalar,
             const scalar* bscalar,
-            const csrAdressing* matrix
+            const csrMatrix* matrix
         );
 
         /** \brief Get the number of iterations of the last solving.
