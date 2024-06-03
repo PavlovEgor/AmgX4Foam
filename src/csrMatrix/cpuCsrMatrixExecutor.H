@@ -63,6 +63,9 @@ public:
     Type* alloc(Foam::label size) const;
 
     template<class Type>
+    Type* alloc(Foam::label size, Type value) const;
+
+    template<class Type>
     const Type* copyFromFoam(Foam::label size, const Type* hostPtr) const;
 
     template<class Type>
@@ -71,50 +74,77 @@ public:
     template<class Type>
     void clear(const Type* ptr) const;
 
+    void initializeSequence
+    (
+    const label len,
+          label * vect
+    ) const;
+
     void initializeAddressing
     (
-        const label   nCells,
+        const label   nConsRows,
+        const label   nConsIntFaces,
+        const label   nRows,
         const label   nInternalFaces,
-        const label   totNnz,
         const label * const owner,
         const label * const neighbour,
-              label * tmpPerm,
               label * rowIndTmp,
-              label * colIndTmp
+              label * colIndTmp,
+        const label   rowsDispl = 0,
+        const label   intFacesDispl = 0
     ) const;
 
     void initializeAddressingExt
     (
-        const label   nCells,
+        const label   nConsRows,
+        const label   nConsIntFaces,
+        const label   nRows,
         const label   nInternalFaces,
         const label   nnzExt,
-        const label   totNnz,
         const label * const owner,
         const label * const neighbour,
         const label * const extRows,
         const label * const extCols,
-              label * tmpPerm,
               label * rowIndTmp,
-              label * colIndTmp
+              label * colIndTmp,
+        const label   rowsDispl =0,
+        const label   intFacesDispl = 0,
+        const label   extNnzDispl = 0
     ) const;
 
     void computeSorting
     (
         const label   totNnz,
-              label * tmpPerm,
-              label * rowIndTmp,
+        const label * const tmpPerm,
+        const label * const rowIndTmp,
               label * rowInd,
               label * ldu2csr
     ) const;
 
     void localToGlobalColIndices
     (
+        const label   nConsRows,
+        const label   nConsIntFaces,
         const label   nRows,
         const label   nIntFaces,
         const label   diagIndexGlobal,
         const label   lowOffGlobal,
         const label   uppOffGlobal,
-              label * colIndicesGlobal
+              label * colIndicesGlobal,
+        const label   rowDispl = 0,
+        const label   intFacesDispl = 0
+    ) const;
+
+    void localToConsRowIndex
+    (
+        const label nConsRows,
+        const label nConsIntFaces,
+        const label nIntFaces,
+        const label nExtNz,
+        const label intFacesDipl,
+        const label extDispl,
+        const label offset,
+                label * rowIndices
     ) const;
 
     void applyAddressingPermutation
@@ -130,24 +160,33 @@ public:
 
     void initializeValue
     (
-        const label    nCells,
-        const label    nIntFaces,
-        const scalar * const diag,
-        const scalar * const upper,
-        const scalar * const lower,
-              scalar * valuesTmp                  
+        const label   nConsRows,
+        const label   nConsIntFaces,
+        const label   nRows,
+        const label   nIntFaces,
+        const double * const diag,
+        const double * const upper,
+        const double * const lower,
+              double * valuesTmp,
+        const label   rowsDisp = 0,
+        const label   intFacesDisp = 0                   
     ) const;
 
     void initializeValueExt
     (
-        const label    nCells,
-        const label    nIntFaces,
-        const label    nnzExt,
-        const scalar * const diag,
-        const scalar * const upper,
-        const scalar * const lower,
-        const scalar * const extValue,
-              scalar * valuesTmp
+        const label nConsRows,
+        const label nConsIntFaces,
+        const label nCells,
+        const label nIntFaces,
+        const label nnzExt,
+        const double * const diag,
+        const double * const upper,
+        const double * const lower,
+        const double * const extValue,
+              double * valuesTmp,
+        const label rowsDisp = 0,
+        const label intFacesDisp = 0,
+        const label extValDisp = 0
     ) const;
 
     void applyValuePermutation

@@ -115,7 +115,7 @@ class AmgXWrapper
             const string &configStr
         );
 
-        void initialiseMatrixComms(csrAdressing* matrix);
+        void initialiseMatrixComms(csrMatrix* matrix);
 
 
         /** \brief Finalize this instance.

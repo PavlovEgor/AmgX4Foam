@@ -33,40 +33,67 @@ License
 
 // * * * * * * * * * * * * * * * * * Kernels * * * * * * * * * * * * * * * * //
 
+inline void Foam::csrMatrix::initializeSequence
+(
+    const label len,
+          label * vect
+)const 
+{
+    std::visit
+	([
+        len,
+        vect
+	 ]
+	 (const auto& exec){ exec.initializeSequence
+                            (
+                                len,
+                                vect
+					        );
+                       },
+     csrMatExec_);
+}
+
+
 inline void Foam::csrMatrix::initializeAddressing
 (
-    const label   nCells,
+    const label   nConsRows,
+    const label   nConsIntFaces,
+    const label   nRows,
     const label   nInternalFaces,
-    const label   totNnz,
     const label * const owner,
     const label * const neighbour,
-          label * tmpPerm,
           label * rowIndTmp,
-          label * colIndTmp
+          label * colIndTmp,
+    const label   rowsDispl,
+    const label   intFacesDispl
 )
 {
     std::visit
 	([
-        nCells,
+        nConsRows,
+        nConsIntFaces,
+        nRows,
         nInternalFaces,
-        totNnz,
         &owner,
         &neighbour,
-        &tmpPerm,
         &rowIndTmp,
-        &colIndTmp
+        &colIndTmp,
+        rowsDispl,
+        intFacesDispl
 	 ]
 	 (const auto& exec){ exec.initializeAddressing
-                           (
-                               nCells,
-                               nInternalFaces,
-                               totNnz,
-                               owner,
-                               neighbour,
-                               tmpPerm,
-                               rowIndTmp,
-                               colIndTmp
-					       );
+                            (
+                                nConsRows,
+                                nConsIntFaces,
+                                nRows,
+                                nInternalFaces,
+                                owner,
+                                neighbour,
+                                rowIndTmp,
+                                colIndTmp,
+                                rowsDispl,
+                                intFacesDispl
+					        );
                        },
      csrMatExec_);
 }
@@ -74,46 +101,55 @@ inline void Foam::csrMatrix::initializeAddressing
 
 inline void Foam::csrMatrix::initializeAddressingExt
 (
-    const label   nCells,
+    const label   nConsRows,
+    const label   nConsIntFaces,
+    const label   nRows,
     const label   nInternalFaces,
     const label   nnzExt,
-    const label   totNnz,
     const label * const owner,
     const label * const neighbour,
     const label * const extRows,
     const label * const extCols,
-          label * tmpPerm,
           label * rowIndTmp,
-          label * colIndTmp
+          label * colIndTmp,
+    const label   rowsDispl,
+    const label   intFacesDispl,
+    const label   extNnzDispl 
 )
 {
     std::visit
 	([
-        nCells,
+        nConsRows,
+        nConsIntFaces,
+        nRows,
         nInternalFaces,
         nnzExt,
-        totNnz,
         &owner,
         &neighbour,
         &extRows,
         &extCols,
-        &tmpPerm,
         &rowIndTmp,
-        &colIndTmp
+        &colIndTmp,
+        rowsDispl,
+        intFacesDispl,
+        extNnzDispl
 	 ]
 	 (const auto& exec){ exec.initializeAddressingExt
                            (
-                               nCells,
-                               nInternalFaces,
-                               nnzExt,
-                               totNnz,
-                               owner,
-                               neighbour,
-                               extRows,
-                               extCols,
-                               tmpPerm,
-                               rowIndTmp,
-                               colIndTmp
+                                nConsRows,
+                                nConsIntFaces,
+                                nRows,
+                                nInternalFaces,
+                                nnzExt,
+                                owner,
+                                neighbour,
+                                extRows,
+                                extCols,
+                                rowIndTmp,
+                                colIndTmp,
+                                rowsDispl,
+                                intFacesDispl,
+                                extNnzDispl
 					       );
                        },
      csrMatExec_);
@@ -122,8 +158,8 @@ inline void Foam::csrMatrix::initializeAddressingExt
 inline void Foam::csrMatrix::computeSorting
 (
     const label   totNnz,
-          label * tmpPerm,
-          label * rowIndTmp,
+    const label * const tmpPerm,
+    const label * const rowIndTmp,
           label * rowInd,
           label * ldu2csr
 )
@@ -151,32 +187,83 @@ inline void Foam::csrMatrix::computeSorting
 
 inline void Foam::csrMatrix::localToGlobalColIndices
 (
-    const label nRows,
-    const label nIntFaces,
-    const label diagIndexGlobal,
-    const label lowOffGlobal,
-    const label uppOffGlobal,
-    label *colIndicesGlobal
+    const label   nConsRows,
+    const label   nConsIntFaces,
+    const label   nRows,
+    const label   nIntFaces,
+    const label   diagIndexGlobal,
+    const label   lowOffGlobal,
+    const label   uppOffGlobal,
+          label * colIndicesGlobal,
+    const label   rowsDispl,
+    const label   intFacesDispl
 )
 {
     std::visit
 	([
+        nConsRows,
+        nConsIntFaces,
         nRows,
         nIntFaces,
         diagIndexGlobal,
         lowOffGlobal,
         uppOffGlobal,
-        &colIndicesGlobal
+        &colIndicesGlobal,
+        rowsDispl,
+        intFacesDispl
 	 ]
 	 (const auto& exec){ exec.localToGlobalColIndices
-                           (
-                               nRows,
-                               nIntFaces,
-                               diagIndexGlobal,
-                               lowOffGlobal,
-                               uppOffGlobal,
-                               colIndicesGlobal
-					       );
+                            (
+                                nConsRows,
+                                nConsIntFaces,
+                                nRows,
+                                nIntFaces,
+                                diagIndexGlobal,
+                                lowOffGlobal,
+                                uppOffGlobal,
+                                colIndicesGlobal,
+                                rowsDispl,
+                                intFacesDispl
+					        );
+                       },
+     csrMatExec_);
+}
+
+
+inline void Foam::csrMatrix::localToConsRowIndex
+(
+    const label nConsRows,
+    const label nConsIntFaces,
+    const label nIntFaces,
+    const label nExtNz,
+    const label intFacesDipl,
+    const label extDispl,
+    const label offset,
+          label * rowIndices
+)
+{
+    std::visit
+	([
+        nConsRows,
+        nConsIntFaces,
+        nIntFaces,
+        nExtNz,
+        intFacesDipl,
+        extDispl,
+        offset,
+        &rowIndices
+	 ]
+	 (const auto& exec){ exec.localToGlobalColIndices
+                            (
+                                nConsRows,
+                                nConsIntFaces,
+                                nIntFaces,
+                                nExtNz,
+                                intFacesDipl,
+                                extDispl,
+                                offset,
+                                rowIndices
+					        );
                        },
      csrMatExec_);
 }
@@ -219,31 +306,43 @@ inline void Foam::csrMatrix::applyAddressingPermutation
 
 inline void Foam::csrMatrix::initializeValue
 (
-    const label   nCells,
+    const label   nConsRows,
+    const label   nConsIntFaces,
+    const label   nRows,
     const label   nIntFaces,
-    const scalar * const diag,
-    const scalar * const upper,
-    const scalar * const lower,
-            scalar * valuesTmp                  
+    const double * const diag,
+    const double * const upper,
+    const double * const lower,
+          double * valuesTmp,
+    const label   rowsDisp,
+    const label   intFacesDisp                  
 )
 {
     std::visit
 	([
-        nCells,
+        nConsRows,
+        nConsIntFaces,
+        nRows,
         nIntFaces,
         &diag,
         &upper,
         &lower,
-        &valuesTmp 
+        &valuesTmp ,
+        rowsDisp,
+        intFacesDisp
 	 ]
 	 (const auto& exec){ exec.initializeValue
                            (
-                                nCells,
+                                nConsRows,
+                                nConsIntFaces,
+                                nRows,
                                 nIntFaces,
                                 diag,
                                 upper,
                                 lower,
-                                valuesTmp
+                                valuesTmp,
+                                rowsDisp,
+                                intFacesDisp
 					       );
                        },
      csrMatExec_);
@@ -252,18 +351,25 @@ inline void Foam::csrMatrix::initializeValue
 
 inline void Foam::csrMatrix::initializeValueExt
 (
+    const label nConsRows,
+    const label nConsIntFaces,
     const label nCells,
     const label nIntFaces,
     const label nnzExt,
-    const scalar * const diag,
-    const scalar * const upper,
-    const scalar * const lower,
-    const scalar * const extValue,
-          scalar * valuesTmp
+    const double * const diag,
+    const double * const upper,
+    const double * const lower,
+    const double * const extValue,
+          double * valuesTmp,
+    const label rowsDisp,
+    const label intFacesDisp,
+    const label extValDisp
 )
 {
     std::visit
 	([
+        nConsRows,
+        nConsIntFaces,
         nCells,
         nIntFaces,
         nnzExt,
@@ -271,10 +377,15 @@ inline void Foam::csrMatrix::initializeValueExt
         &upper,
         &lower,
         &extValue,
-        &valuesTmp 
+        &valuesTmp,
+        rowsDisp,
+        intFacesDisp,
+        extValDisp
 	 ]
 	 (const auto& exec){ exec.initializeValueExt
                            (
+                                nConsRows,
+                                nConsIntFaces,
                                 nCells,
                                 nIntFaces,
                                 nnzExt,
@@ -282,7 +393,10 @@ inline void Foam::csrMatrix::initializeValueExt
                                 upper,
                                 lower,
                                 extValue,
-                                valuesTmp 
+                                valuesTmp,
+                                rowsDisp,
+                                intFacesDisp,
+                                extValDisp
 					       );
                        },
      csrMatExec_);
@@ -294,7 +408,8 @@ inline void Foam::csrMatrix::applyValuePermutation
     const label totNnz,
     const label  * const ldu2csr,
     const scalar * const valuesTmp,
-          scalar * values
+          scalar * values,
+    const label  nBlocks
 )
 {
     std::visit
@@ -302,14 +417,16 @@ inline void Foam::csrMatrix::applyValuePermutation
         totNnz,
         &ldu2csr,
         &valuesTmp,
-        &values
+        &values,
+        nBlocks
 	 ]
 	 (const auto& exec){ exec.applyValuePermutation
                             (
                                 totNnz,
                                 ldu2csr,
                                 valuesTmp,
-                                values
+                                values,
+                                nBlocks
 					        );
                        },
      csrMatExec_);

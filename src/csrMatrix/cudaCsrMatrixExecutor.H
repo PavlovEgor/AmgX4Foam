@@ -38,6 +38,8 @@ SourceFiles
 
 \*---------------------------------------------------------------------------*/
 
+#ifdef have_cuda
+
 #ifndef cuda_CsrMatrix_Executor_H
 #define cuda_CsrMatrix_Executor_H
 
@@ -166,5 +168,6 @@ public:
 
 #endif
 
+#endif // end if have_cuda
 // ************************************************************************* //
 

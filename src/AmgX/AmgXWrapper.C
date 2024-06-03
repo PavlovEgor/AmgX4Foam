@@ -130,7 +130,7 @@ void Foam::AmgXWrapper::initialize(
 }
 
 
-void Foam::AmgXWrapper::initialiseMatrixComms(csrAdressing* matrix)
+void Foam::AmgXWrapper::initialiseMatrixComms(csrMatrix* matrix)
 {
     labelList gpuWorldProcs(gpuWorldSize_);
 
@@ -363,8 +363,8 @@ void Foam::AmgXWrapper::setOperator
 {
     if(gpuProc_)
     {    
-        const label nLocalRows = matrix->ownerStart().size() - 1;
-        const label nLocalNz = matrix->colIndices().size();
+        const label nLocalRows = matrix->nOwnerStart() - 1;
+        const label nLocalNz = matrix->nLocalNz();
         const label nBlocks = matrix->nBlocks();
         
         //- Check the matrix size is not larger than tolerated by AmgX
@@ -396,9 +396,9 @@ void Foam::AmgXWrapper::setOperator
             cudaMalloc((void**) &ownStart, sizeof(int)*(nLocalRows+1));
             cudaMalloc((void**) &colInd, sizeof(int)*nLocalNz);
             cudaMalloc((void**) &matValues, sizeof(double)*nLocalNz);
-            cudaMemcpy((void*) ownStart, (const void*) matrix->ownerStart().cdata(), sizeof(int)*(nLocalRows+1), cudaMemcpyHostToDevice);
-            cudaMemcpy((void*) colInd, (const void*) matrix->colIndices().cdata(), sizeof(int)*nLocalNz, cudaMemcpyHostToDevice);
-            cudaMemcpy((void*) matValues, (const void*) matrix->values().cdata(), sizeof(double)*nLocalNz, cudaMemcpyHostToDevice);
+            cudaMemcpy((void*) ownStart, (const void*) matrix->ownerStart(), sizeof(int)*(nLocalRows+1), cudaMemcpyHostToDevice);
+            cudaMemcpy((void*) colInd, (const void*) matrix->colIndices(), sizeof(int)*nLocalNz, cudaMemcpyHostToDevice);
+            cudaMemcpy((void*) matValues, (const void*) matrix->values(), sizeof(double)*nLocalNz, cudaMemcpyHostToDevice);
 
             if(matrix->isConsolidated())
             {
@@ -412,9 +412,9 @@ void Foam::AmgXWrapper::setOperator
         }
         else
         {
-            ownStart = matrix->ownerStart().cdata();
-            colInd = matrix->colIndices().cdata();
-            matValues = matrix->values().cdata();
+            ownStart = matrix->ownerStart();
+            colInd = matrix->colIndices();
+            matValues = matrix->values();
         }
 
         //- upload matrix A to AmgX
@@ -486,9 +486,9 @@ void Foam::AmgXWrapper::updateOperator
 {
     if(gpuProc_)
     {
-        const label nLocalRows = matrix->ownerStart().size() - 1;
-        const label nLocalNz = matrix->values().size();
-        const void * matValues = matrix->values().cdata();
+        const label nLocalRows = matrix->nOwnerStart() - 1;
+        const label nLocalNz = matrix->nLocalNz();
+        const void * matValues = matrix->values();
 
         //- Replace the coefficients for the CSR matrix A within AmgX
         AMGX_matrix_replace_coefficients(AmgXA, nLocalRows, nLocalNz, matValues, nullptr);
@@ -518,7 +518,7 @@ void Foam::AmgXWrapper::solve
 
     if(matrix->isConsolidated())
     {       
-        consDispl = matrix->rowsConsDisp().cdata()[myGpuWorldRank_];
+        consDispl = matrix->rowsConsDisp()[myGpuWorldRank_];
         cudaMemcpy((void*) &pCons_[consDispl], pscalar, nLocalRows*sizeof(scalar), cudaMemcpyHostToDevice); // cudaMemcpyDefault);
         checkCudaError(cudaMemcpy((void**) &(rhsCons_[consDispl]), (void*) bscalar, (size_t) (nLocalRows*sizeof(scalar)), cudaMemcpyDefault ), // cudaMemcpyDefault);
                        "b cudaMemcpy");

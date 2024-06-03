@@ -50,6 +50,16 @@ SourceFiles
 namespace Foam
 {
 
+/* Enumeration for the status of matrix consolidation for the solver.*/
+enum class ConsolidationStatus
+{
+    uninitialised,
+    necessary,
+    notNecessary,
+    initialized,
+    consolidated
+};
+
 // Forward Declarations
 class csrMatrix;
 
@@ -79,6 +89,18 @@ protected:
         //- Number of local Nz
         label nLocalNz_ = 0;
 
+        //- Total number of rows in the consolidated matrix
+        label nConsRows_;
+
+        //- Total number of internal faces in the consolidated matrix
+        label nConsIntFaces_;
+        
+        //- Total number of external values in the consolidated matrix
+        label nConsExtNz_;
+
+        //- Total number of non-zero values in the consolidated matrix
+        // label nConsTotNz_;
+
         //- Numbers of non-zeros per row
         label* ownerStartPtr_;
 
@@ -91,78 +113,183 @@ protected:
         //- Coefficients
         scalar* valuesPtr_;
 
+        //- Rows diplacement between consolidated processes
+        label * rowsConsDispPtr_;
+
+        //- Internal faces displcament between consolidated processes
+        label * intFacesConsDispPtr_;
+    
+        //- External values displcament between consolidated processes
+        label * extNzConsDispPtr_;
+
+        //- Flag for computed permutation
+        bool       hasPermutation_ = false;
+
+        //- A flag indicating the type of consolidation applied
+        ConsolidationStatus consolidationStatus_ = ConsolidationStatus::uninitialised;
+
+        //- Index of the MPI communicator processes that talk to a GPU
+        label gpuWorld_;
+
+        //- Size of gpuWorld
+        label gpuWorldSize_;
+
+        //- Rank in gpuWorld
+        label myGpuWorldRank_;
+
+        //- Indication if the process talk directly to GPU
+        bool gpuProc_ = false;        
+
     //- Protected functions
+        void initializeConsolidation
+        (
+            const label nLocalIntFaces,
+            const label nLocalExtNz,
+            const label diagIndexGlobal,
+            const label lowOffGlobal,
+            const label uppOffGlobal,
+            const label* own,
+            const label* neigh,
+            const label* extRows,
+            const label* extCols,
+                  label& nConsTotNz,
+                  labelList* consDiagOffGlob,
+                  labelList* consLowOffGlob, 
+                  labelList* consUppOffGlob,
+                  List<const label*>& ownLst,
+                  List<const label*>& neighLst,
+                  List<const label*>& extRowsLst,
+                  List<const label*>& extColsLst
+        );
+
+        void initializeSequence
+        (
+            const label len,
+                  label * vect
+        ) const;
+
         void initializeAddressing
         (
-            const label   nCells,
+            const label   nConsRows,
+            const label   nConsIntFaces,
+            const label   nRows,
             const label   nInternalFaces,
-            const label   totNnz,
             const label * const owner,
             const label * const neighbour,
-                  label * tmpPerm,
                   label * rowIndTmp,
-                  label * colIndTmp
+                  label * colIndTmp,
+            const label   rowsDispl = 0,
+            const label   intFacesDispl = 0
         );
 
         void initializeAddressingExt
         (
-            const label   nCells,
+            const label   nConsRows,
+            const label   nConsIntFaces,
+            const label   nRows,
             const label   nInternalFaces,
             const label   nnzExt,
-            const label   totNnz,
             const label * const owner,
             const label * const neighbour,
             const label * const extRows,
             const label * const extCols,
-                  label * tmpPerm,
                   label * rowIndTmp,
-                  label * colIndTmp
+                  label * colIndTmp,
+            const label   rowsDispl =0,
+            const label   intFacesDispl = 0,
+            const label   extNnzDispl = 0
         );
 
+        void computeSorting
+        (
+            const label   totNnz,
+            const label * const tmpPerm,
+            const label * const rowIndTmp,
+                  label * rowInd,
+                  label * ldu2csr
+        );
 
-    // Private methods
+        void localToGlobalColIndices
+        (
+            const label   nConsRows,
+            const label   nConsIntFaces,
+            const label   nRows,
+            const label   nIntFaces,
+            const label   diagIndexGlobal,
+            const label   lowOffGlobal,
+            const label   uppOffGlobal,
+                  label * colIndicesGlobal,
+            const label   rowDispl = 0,
+            const label   intFacesDispl = 0
+        );
+
+        void localToConsRowIndex
+        (
+            const label nConsRows,
+            const label nConsIntFaces,
+            const label nIntFaces,
+            const label nExtNz,
+            const label intFacesDipl,
+            const label extDispl,
+            const label offset,
+                  label * rowIndices
+        );
+
+        void applyAddressingPermutation
+        (
+            const label   nCells,
+            const label   totNnz,
+            const label * const ldu2csr,
+            const label * const colIndTmp,
+            const label * const rowInd,
+                  label * colInd,
+                  label * ownStart
+        );
 
         void initializeValuesConsolidation
         (
-            const scalarField& diag,
-            const scalarField& upper,
-            const scalarField& lower,
-            const scalarField& extVal,
-            List<scalarField>& diagLst,
-            List<scalarField>& upperLst,
-            List<scalarField>& lowerLst,
-            List<scalarField>& extValLst
+            const label nLocalRows,
+            const label nLocalIntFaces,
+            const label nLocalExtVals,
+            const scalar * diag,
+            const scalar * upper,
+            const scalar * lower,
+            const scalar * extVal,
+            List<const scalar*>& diagLst,
+            List<const scalar*>& upperLst,
+            List<const scalar*>& lowerLst,
+            List<const scalar*>& extValLst
         );
            
         void initializeValue
         (
-            const int   nConsRows,
-            const int   nConsIntFaces,
-            const int   nRows,
-            const int   nIntFaces,
+            const label   nConsRows,
+            const label   nConsIntFaces,
+            const label   nRows,
+            const label   nIntFaces,
             const double * const diag,
             const double * const upper,
             const double * const lower,
-                double * valuesTmp,
-            const int   rowsDisp = 0,
-            const int   intFacesDisp = 0              
+                  double * valuesTmp,
+            const label   rowsDisp = 0,
+            const label   intFacesDisp = 0              
         );
 
         void initializeValueExt
         (
-            const int nConsRows,
-            const int nConsIntFaces,
-            const int nCells,
-            const int nIntFaces,
-            const int nnzExt,
+            const label nConsRows,
+            const label nConsIntFaces,
+            const label nCells,
+            const label nIntFaces,
+            const label nnzExt,
             const double * const diag,
             const double * const upper,
             const double * const lower,
             const double * const extValue,
-                    double * valuesTmp,
-            const int rowsDisp = 0,
-            const int intFacesDisp = 0,
-            const int extValDisp = 0
+                  double * valuesTmp,
+            const label rowsDisp = 0,
+            const label intFacesDisp = 0,
+            const label extValDisp = 0
         );
 
         void applyValuePermutation
@@ -170,7 +297,8 @@ protected:
             const label totNnz,
             const label  * const ldu2csr,
             const scalar * const valuesTmp,
-                  scalar * values
+                  scalar * values,
+            const label    nBlocks = 1
         );
 
         //- Computation of the permutatrion array
@@ -253,10 +381,26 @@ public:
                 return ldu2csrPerm_;
             }
 
+            //- Retrun rows displacement in consolidated matrix
+            label nConsRows() const
+            {
+                return nConsRows_;
+            }
+
+            const label* rowsConsDisp() const
+            {
+                return rowsConsDispPtr_;
+            }
+
             //- Return true if the permutation has been computed
             bool hasPermutation() const noexcept
             {
-                return (ldu2csrPerm_);
+                return hasPermutation_;
+            }
+
+            bool isConsolidated() const
+            {
+                return consolidationStatus_ == ConsolidationStatus::initialized;
             }
 
         //- Access to coefficients
@@ -277,6 +421,9 @@ public:
 
             //- Deallocate useless addressing pointer
             void clearAddressing();
+
+            //- Initialize matrix comunications for consolidation
+            void initializeComms(label commId, bool gpuProc);
 
             //- Apply permutation from LDU to CSR
             void applyPermutation(const lduMatrix& lduMatrix);

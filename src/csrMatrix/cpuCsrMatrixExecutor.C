@@ -46,6 +46,18 @@ Type* Foam::cpuCsrMatrixExecutor::alloc
 }
 
 template<class Type>
+Type* Foam::cpuCsrMatrixExecutor::alloc
+(
+    Foam::label size,
+    Type value
+) const
+{
+    Type* ptr = new Type[size];
+    for(Foam::label i=0; i < size; ++i)  ptr[i] = value;
+	return ptr;
+}
+
+template<class Type>
 const Type* Foam::cpuCsrMatrixExecutor::copyFromFoam
 (
     Foam::label size,
@@ -67,41 +79,41 @@ void Foam::cpuCsrMatrixExecutor::clear(const Type* ptr) const
 {
 }
 
-void Foam::cpuCsrMatrixExecutor::initializeAddressing
+void Foam::cpuCsrMatrixExecutor::initializeSequence
 (
-    const Foam::label   nCells,
-    const Foam::label   nInternalFaces,
-    const Foam::label   totNnz,
-    const Foam::label * const owner,
-    const Foam::label * const neighbour,
-          Foam::label * tmpPerm,
-          Foam::label * rowIndTmp,
-          Foam::label * colIndTmp
+    const label len,
+          label * vect
 ) const
 {
-    // Initialize tmpPerm = [0, 1, ... totNnz-1]
-    for (label i = 0; i < totNnz; ++i)
-    {
-        tmpPerm[i] = i;
-    }
+    // Initialize vect = [0, 1, ... len-1]
+    for(label i = 0; i < len; ++i) vect[i] = i;
+}
 
-    // Initialize: rowIndecesTmp = [0, ... totNnz-1, (owner), (neighbour)]
-    //              colIndecesTmp = [0, ... totNnz-1, (neighbour), (owner)]
-    //              valuesTmp = [(diag), (upper), (lower)]
-
-    for(label i=0; i<nCells; ++i)
-    {
-        rowIndTmp[i] = i;
-        colIndTmp[i] = i;
-    }
+void Foam::cpuCsrMatrixExecutor::initializeAddressing
+(
+    const label   nConsRows,
+    const label   nConsIntFaces,
+    const label   nRows,
+    const label   nInternalFaces,
+    const label * const owner,
+    const label * const neighbour,
+          label * rowIndTmp,
+          label * colIndTmp,
+    const label   rowsDispl, //default =0
+    const label   intFacesDispl //default =0
+) const
+{
+    // Initialize: rowIndecesTmp = [0, ... nConsRows, (owner), (neighbour)]
+    //             colIndecesTmp = [0, ... nRows1, .. 0 ... nRowsN, (neighbour), (owner)]
+    for(label i=0; i<nRows; ++i) colIndTmp[rowsDispl + i] = i;
 
     for(label i=0; i<nInternalFaces; ++i)
     {
-        rowIndTmp[nCells + i] = owner[i];
-        colIndTmp[nCells + i] = neighbour[i];
+        rowIndTmp[nConsRows + intFacesDispl + i] = owner[i];
+        colIndTmp[nConsRows + intFacesDispl + i] = neighbour[i];
 
-        rowIndTmp[nCells + nInternalFaces + i] = neighbour[i];
-        colIndTmp[nCells + nInternalFaces + i] = owner[i];
+        rowIndTmp[nConsRows + nConsIntFaces + intFacesDispl + i] = neighbour[i];
+        colIndTmp[nConsRows + nConsIntFaces + intFacesDispl + i] = owner[i];
     }
 
     return;
@@ -109,35 +121,40 @@ void Foam::cpuCsrMatrixExecutor::initializeAddressing
 
 void Foam::cpuCsrMatrixExecutor::initializeAddressingExt
 (
-    const label   nCells,
+    const label   nConsRows,
+    const label   nConsIntFaces,
+    const label   nRows,
     const label   nInternalFaces,
     const label   nnzExt,
-    const label   totNnz,
     const label * const owner,
     const label * const neighbour,
     const label * const extRows,
     const label * const extCols,
-          label * tmpPerm,
           label * rowIndTmp,
-          label * colIndTmp
+          label * colIndTmp,
+    const label   rowsDispl, // default = 0
+    const label   intFacesDispl, // default = 0
+    const label   extNnzDispl // default = 0
 ) const
 {
     this->initializeAddressing
     (
-        nCells,
+        nConsRows,
+        nConsIntFaces,
+        nRows,
         nInternalFaces,
-        totNnz,
         owner,
         neighbour,
-        tmpPerm,
         rowIndTmp,
-        colIndTmp
+        colIndTmp,
+        rowsDispl,
+        intFacesDispl
     );
 
     for(int i=0; i<nnzExt; ++i)
     {
-        rowIndTmp[nCells + 2*nInternalFaces + i] = extRows[i];
-        colIndTmp[nCells + 2*nInternalFaces + i] = extCols[i];
+        rowIndTmp[nConsRows + 2*nConsIntFaces + extNnzDispl + i] = extRows[i];
+        colIndTmp[nConsRows + 2*nConsIntFaces + extNnzDispl + i] = extCols[i];
     }
 
     return;
@@ -146,8 +163,8 @@ void Foam::cpuCsrMatrixExecutor::initializeAddressingExt
 void Foam::cpuCsrMatrixExecutor::computeSorting
 (
     const label   totNnz,
-          label * tmpPerm,
-          label * rowIndTmp,
+    const label * const tmpPerm,
+    const label * const rowIndTmp,
           label * rowInd,
           label * ldu2csr
 ) const
@@ -173,23 +190,52 @@ void Foam::cpuCsrMatrixExecutor::computeSorting
 
 void Foam::cpuCsrMatrixExecutor::localToGlobalColIndices
 (
-    const label nRows,
-    const label nIntFaces,
-    const label diagIndexGlobal,
-    const label lowOffGlobal,
-    const label uppOffGlobal,
-    label *colIndicesGlobal
+    const label   nConsRows,
+    const label   nConsIntFaces,
+    const label   nRows,
+    const label   nIntFaces,
+    const label   diagIndexGlobal,
+    const label   lowOffGlobal,
+    const label   uppOffGlobal,
+          label * colIndicesGlobal,
+    const label   rowDispl, // default = 0
+    const label   intFacesDispl // default = 0
 ) const
 {
     for(label i=0; i<nRows; ++i)
     {
-        colIndicesGlobal[i] += diagIndexGlobal;
+        colIndicesGlobal[rowDispl + i] += diagIndexGlobal;
     }
 
     for(label i=0; i<nIntFaces; ++i)
     {
-        colIndicesGlobal[nRows + i] += uppOffGlobal;
-        colIndicesGlobal[nRows + nIntFaces + i] += lowOffGlobal;
+        colIndicesGlobal[nConsRows + intFacesDispl + i] += uppOffGlobal;
+        colIndicesGlobal[nConsRows + nConsIntFaces + intFacesDispl + i] += lowOffGlobal;
+    }
+}
+
+
+void Foam::cpuCsrMatrixExecutor::localToConsRowIndex
+(
+    const label nConsRows,
+    const label nConsIntFaces,
+    const label nIntFaces,
+    const label nExtNz,
+    const label intFacesDipl,
+    const label extDispl,
+    const label offset,
+          label * rowIndices
+) const
+{
+    for(label i=0; i<nIntFaces; ++i)
+    {
+        rowIndices[nConsRows + intFacesDipl + i] += offset;
+        rowIndices[nConsRows + nConsIntFaces + intFacesDipl + i] += offset;
+    }
+
+    for(label i=0; i<nExtNz; ++i)
+    {
+        rowIndices[nConsRows + 2 * nConsIntFaces + extDispl + i] += offset;
     }
 }
 
@@ -224,54 +270,67 @@ void Foam::cpuCsrMatrixExecutor::applyAddressingPermutation
 
 void Foam::cpuCsrMatrixExecutor::initializeValue
 (
-    const label   nCells,
+    const label   nConsRows,
+    const label   nConsIntFaces,
+    const label   nRows,
     const label   nIntFaces,
-    const scalar * const diag,
-    const scalar * const upper,
-    const scalar * const lower,
-          scalar * valuesTmp
+    const double * const diag,
+    const double * const upper,
+    const double * const lower,
+          double * valuesTmp,
+    const label   rowsDisp, // default = 0
+    const label   intFacesDisp // default = 0
 ) const
 {
-    for(label i=0; i<nCells; ++i)
+    for(label i=0; i<nRows; ++i)
     {
-        valuesTmp[i] = diag[i];
+        valuesTmp[rowsDisp + i] = diag[i];
     }
 
     for(label i=0; i<nIntFaces; ++i)
     {
-        valuesTmp[nCells + i] = upper[i];
-        valuesTmp[nCells + nIntFaces + i] = lower[i];
+        valuesTmp[nConsRows + intFacesDisp + i] = upper[i];
+        valuesTmp[nConsRows + nConsIntFaces + intFacesDisp + i] = lower[i];
     }
 }
 
 
 void Foam::cpuCsrMatrixExecutor::initializeValueExt
 (
-    const label   nCells,
-    const label   nIntFaces,
-    const label   nnzExt,
-    const scalar * const diag,
-    const scalar * const upper,
-    const scalar * const lower,
-    const scalar * const extValue,
-          scalar * valuesTmp
+    const label nConsRows,
+    const label nConsIntFaces,
+    const label nCells,
+    const label nIntFaces,
+    const label nnzExt,
+    const double * const diag,
+    const double * const upper,
+    const double * const lower,
+    const double * const extValue,
+          double * valuesTmp,
+    const label rowsDisp, // default = 0
+    const label intFacesDisp, // default = 0
+    const label extValDisp // default = 0
 ) const
 {
     // Initialize valuesTmp = [(diag), (upper), (lower), (extValues)]
 
     initializeValue
     (
+        nConsRows,
+        nConsIntFaces,
         nCells,
         nIntFaces,
         diag,
         upper,
         lower,
-        valuesTmp
+        valuesTmp,
+        rowsDisp,
+        intFacesDisp
     );
 
     for(label i=0; i<nnzExt; ++i)
     {
-        valuesTmp[nCells + 2*nIntFaces + i] = extValue[i];
+        valuesTmp[nConsRows + 2*nConsIntFaces + extValDisp + i] = extValue[i];
     }
 }
 
@@ -301,21 +360,26 @@ void Foam::cpuCsrMatrixExecutor::applyValuePermutation
 
 #define makecpuCsrMatrixExecutor(Type)                                    \
     template Type* Foam::cpuCsrMatrixExecutor::alloc<Type>                \
-    (                                                                         \
-        Foam::label size                                                      \
-    ) const;                                                                  \
+    (                                                                     \
+        Foam::label size                                                  \
+    ) const;                                                              \
+    template Type* Foam::cpuCsrMatrixExecutor::alloc<Type>                \
+    (                                                                     \
+        Foam::label size,                                                 \
+        Type value                                                        \
+    ) const;                                                              \
     template const Type* Foam::cpuCsrMatrixExecutor::copyFromFoam<Type>   \
-    (                                                                         \
-        Foam::label size,                                                     \
-        const Type* hostPtr                                                   \
-    ) const;                                                                  \
+    (                                                                     \
+        Foam::label size,                                                 \
+        const Type* hostPtr                                               \
+    ) const;                                                              \
     template void  Foam::cpuCsrMatrixExecutor::clear<Type>                \
-    (                                                                         \
-        Type* ptr                                                             \
-    ) const;                                                                  \
+    (                                                                     \
+        Type* ptr                                                         \
+    ) const;                                                              \
     template void  Foam::cpuCsrMatrixExecutor::clear<Type>                \
-    (                                                                         \
-        const Type* ptr                                                       \
+    (                                                                     \
+        const Type* ptr                                                   \
     ) const;
 
 makecpuCsrMatrixExecutor(Foam::label)

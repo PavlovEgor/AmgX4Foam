@@ -242,7 +242,7 @@ void Foam::csrAdressing::clearAddressing()
 }
 
 
-//- Deallocate useless addressing pointer
+//- Initialize consolidation
 void Foam::csrAdressing::initializeConsolidation
 (
     const label nLocalRows,

@@ -36,6 +36,8 @@ License
 #include "global.cuh"
 #include <cub/cub.cuh>
 
+#ifdef have_cuda
+
 // * * * * * * * * * * * * * * * * CUDA Kernels  * * * * * * * * * * * * * * //
 
 __global__
@@ -659,5 +661,7 @@ void Foam::cudaCsrMatrixExecutor::applyValuePermutation
 
 makecudaCsrMatrixExecutor(Foam::label)
 makecudaCsrMatrixExecutor(Foam::scalar)
+
+#endif // enbd if have_cuda
 
 // ************************************************************************* //
