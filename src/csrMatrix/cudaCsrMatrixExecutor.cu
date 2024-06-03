@@ -183,9 +183,26 @@ void cudaApplyPermutation
 
     if(i < length)
     {
-        dstArray[i] = srcArray[permArray[i]];
+        dstArray[permArray[i]] = srcArray[i];
     }
 }
+
+__global__
+void cudaSetLdu2Csr
+(
+    const int   length,
+    const int * const permArray,
+          int * dstArray
+)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if(i < length)
+    {
+        dstArray[permArray[i]] = i;
+    }
+}
+
 
 __global__
 void cudaInitializeValueD
@@ -254,7 +271,7 @@ void cudaApplyValuePermutation
 
     if(i < length)
     {
-        dstArray[i] = srcArray[permArray[i / blockLen] + i % blockLen];
+        dstArray[permArray[i/blockLen]] = srcArray[i + i % blockLen];
     }
 } 
 //NOTA: this function (when csrAdressing will be joined back to csrMatrix) will 
@@ -278,6 +295,27 @@ Type* Foam::cudaCsrMatrixExecutor::alloc
     }
     return static_cast<Type*>(ptr);
 }
+
+template<class Type>
+Type* Foam::cudaCsrMatrixExecutor::allocZero
+(
+    Foam::label size
+) const
+{
+    void* ptr;
+    int err = CHECK_CUDA_ERROR(cudaMalloc((void**)&ptr, size*sizeof(Type)));
+    if (err != 0)
+    {
+        FatalErrorInFunction << "ERROR: cudaMalloc returned " << err << abort(FatalError);
+    }
+    err = CHECK_CUDA_ERROR(cudaMemset((void *)ptr, Type(Foam::Zero), (size)*sizeof(Type)));
+    if (err != 0)
+    {
+        FatalErrorInFunction << "ERROR: cudaMemset returned " << err << abort(FatalError);
+    }
+    return static_cast<Type*>(ptr);
+}
+
 
 template<class Type>
 const Type* Foam::cudaCsrMatrixExecutor::copyFromFoam
@@ -435,7 +473,17 @@ void Foam::cudaCsrMatrixExecutor::computeSorting
     cub::DeviceRadixSort::SortPairs(tempStorage, tempStorageBytes, d_keys, d_values, totNnz);
 
     rowInd = d_keys.Current();
-    ldu2csr = d_values.Current();
+    tmpPerm = d_values.Current();
+
+    label numBlocks = (totNnz + NUM_THREADS_PER_BLOCK - 1) / NUM_THREADS_PER_BLOCK;
+    cudaSetLdu2Csr<<<numBlocks, NUM_THREADS_PER_BLOCK>>>
+    (
+        totNnz,
+        tmpPerm,
+        ldu2csr
+    );
+    cudaDeviceSynchronize();
+
 
     cudaFree(tempStorage);
 
