@@ -128,22 +128,22 @@ Foam::solverPerformance Foam::AmgXSolver::solve
     // label nnz = Amat.nLocalNz();
 
     //- Print matrix converted to check
-    /*string fileName = "ownStart-cpu" + std::to_string(Pstream::myProcNo());
+    /*string fileName = "ownStart-escape" + std::to_string(Pstream::myProcNo());
     std::ofstream outFile1(fileName); //, std::ios_base::app);
     outFile1 << "ownerStart:" << nl;
-    for(int i=0; i< nCells+1; ++i) outFile1 << Amat.ownerStart().cdata()[i] << nl;
+    for(int i=0; i< Amat.nOwnerStart(); ++i) outFile1 << Amat.ownerStart()[i] << nl;
     outFile1.close();
 
-    fileName = "colIndices-cpu" + std::to_string(Pstream::myProcNo());
+    fileName = "colIndices-escape" + std::to_string(Pstream::myProcNo());
     std::ofstream outFile2(fileName);
-    outFile2 << nl << "colIndeces:" << nl;
-    for(int i=0; i< nnz; ++i) outFile2 << Amat.colIndices().cdata()[i] << nl;
+    outFile2 << "colIndeces:" << nl;
+    for(int i=0; i< nnz; ++i) outFile2 << Amat.colIndices()[i] << nl;
     outFile2.close();
 
-    fileName = "values-cpu" + std::to_string(Pstream::myProcNo());
+    fileName = "values-escape" + std::to_string(Pstream::myProcNo());
     std::ofstream outFile3(fileName);
-    outFile3 << nl << "values:" << nl;
-    for(int i=0; i< nnz; ++i) outFile3 << Amat.values().cdata()[i] << nl;
+    outFile3 << "values:" << nl;
+    for(int i=0; i< nnz; ++i) outFile3 << Amat.values()[i] << nl;
     outFile3.close();*/
 
     if(!ctx.initialized())

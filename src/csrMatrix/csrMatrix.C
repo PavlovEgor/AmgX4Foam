@@ -217,23 +217,24 @@ void Foam::csrMatrix::initializeComms(label commId, bool gpuProc)
 //- Initialize consolidation
 void Foam::csrMatrix::initializeConsolidation
 (
+    const label nLocalRows,
     const label nLocalIntFaces,
     const label nLocalExtNz,
     const label diagIndexGlobal,
     const label lowOffGlobal,
     const label uppOffGlobal,
-    const label* own,
-    const label* neigh,
-    const label* extRows,
-    const label* extCols,
+    const labelList& own,
+    const labelList& neigh,
+    const labelList& extRows,
+    const labelList& extCols,
           label& nConsTotNz,
           labelList* consDiagOffGlob,
           labelList* consLowOffGlob, 
           labelList* consUppOffGlob,
-          List<const label*>& ownLst,
-          List<const label*>& neighLst,
-          List<const label*>& extRowsLst,
-          List<const label*>& extColsLst
+          List<labelList>& ownLst,
+          List<labelList>& neighLst,
+          List<labelList>& extRowsLst,
+          List<labelList>& extColsLst
 )
 {   
     // rowsConsDispPtr_ = new labelList(gpuWorldSize_ + 1, Foam::Zero);
@@ -252,7 +253,7 @@ void Foam::csrMatrix::initializeConsolidation
                csrMatExec_);
 
     labelList rowsConsDispTmp(gpuWorldSize_);
-    rowsConsDispTmp.data()[myGpuWorldRank_] = nOwnerStart_ - 1;
+    rowsConsDispTmp.data()[myGpuWorldRank_] = nLocalRows;
     Pstream::allGatherList(rowsConsDispTmp, UPstream::msgType(), gpuWorld_);
     
     labelList intFacesConsDispTmp(gpuWorldSize_);
@@ -277,30 +278,32 @@ void Foam::csrMatrix::initializeConsolidation
     nConsExtNz_ = extNzConsDispPtr_[gpuWorldSize_];
     nConsTotNz = nConsRows_ + 2*nConsIntFaces_ + nConsExtNz_;
 
-    // ownLst[myGpuWorldRank_] = own;
-    // Pstream::gatherList(ownLst, UPstream::msgType(), gpuWorld_);
-    MPI_Gather((void *) own, nLocalIntFaces, MPI_INT,
-               (void *) ownLst.cdata(), nLocalIntFaces, MPI_INT, 0,
-               PstreamGlobals::MPICommunicators_[gpuWorld_]);
+    //- Consolidation of LDU adressing
+    ownLst[myGpuWorldRank_] = own;
+    Pstream::gatherList(ownLst, UPstream::msgType(), gpuWorld_);
+    // MPI_Gather((void *) own, nLocalIntFaces, MPI_INT,
+    //            (void *) ownLst, nLocalIntFaces, MPI_INT, 0,
+    //            PstreamGlobals::MPICommunicators_[gpuWorld_]);
     
-    // neighLst[myGpuWorldRank_] = neigh;
-    // Pstream::allGatherList(neighLst, UPstream::msgType(), gpuWorld_);
-    MPI_Gather((void *) neigh, nLocalIntFaces, MPI_INT,
-               (void *) neighLst.cdata(), nLocalIntFaces, MPI_INT, 0,
-               PstreamGlobals::MPICommunicators_[gpuWorld_]);
+    neighLst[myGpuWorldRank_] = neigh;
+    Pstream::gatherList(neighLst, UPstream::msgType(), gpuWorld_);
+    // MPI_Gather((void *) neigh, nLocalIntFaces, MPI_INT,
+    //            (void *) neighLst, nLocalIntFaces, MPI_INT, 0,
+    //            PstreamGlobals::MPICommunicators_[gpuWorld_]);
     
-    // extRowsLst[myGpuWorldRank_] = extRows;
-    // Pstream::allGatherList(extRowsLst, UPstream::msgType(), gpuWorld_);
-    MPI_Gather((void *) extRows, nLocalIntFaces, MPI_INT,
-               (void *) extRowsLst.cdata(), nLocalIntFaces, MPI_INT, 0,
-               PstreamGlobals::MPICommunicators_[gpuWorld_]);
+    extRowsLst[myGpuWorldRank_] = extRows;
+    Pstream::gatherList(extRowsLst, UPstream::msgType(), gpuWorld_);
+    // MPI_Gather((void *) extRows, nLocalIntFaces, MPI_INT,
+    //            (void *) extRowsLst, nLocalIntFaces, MPI_INT, 0,
+    //            PstreamGlobals::MPICommunicators_[gpuWorld_]);
 
-    // extColsLst[myGpuWorldRank_] = extCols;
-    // Pstream::allGatherList(extColsLst, UPstream::msgType(), gpuWorld_);
-    MPI_Gather((void *) extCols, nLocalIntFaces, MPI_INT,
-               (void *) extColsLst.cdata(), nLocalIntFaces, MPI_INT, 0,
-               PstreamGlobals::MPICommunicators_[gpuWorld_]);
+    extColsLst[myGpuWorldRank_] = extCols;
+    Pstream::gatherList(extColsLst, UPstream::msgType(), gpuWorld_);
+    // MPI_Gather((void *) extCols, nLocalIntFaces, MPI_INT,
+    //            (void *) extColsLst, nLocalIntFaces, MPI_INT, 0,
+    //            PstreamGlobals::MPICommunicators_[gpuWorld_]);
 
+    //- Exchange of local to global offset
     //consDiagOffGlob = new labelList(gpuWorldSize_, Foam::Zero);
     consDiagOffGlob->data()[myGpuWorldRank_] = diagIndexGlobal;
     Pstream::gatherList(*consDiagOffGlob, UPstream::msgType(), gpuWorld_);
@@ -326,39 +329,39 @@ void Foam::csrMatrix::initializeValuesConsolidation
     const label nLocalRows,
     const label nLocalIntFaces,
     const label nLocalExtVals,
-    const scalar * diag,
-    const scalar * upper,
-    const scalar * lower,
-    const scalar * extVal,
-    List<const scalar*>& diagLst,
-    List<const scalar*>& upperLst,
-    List<const scalar*>& lowerLst,
-    List<const scalar*>& extValLst
+    const scalarField& diag,
+    const scalarField& upper,
+    const scalarField& lower,
+    const scalarField& extVal,
+    List<scalarField>& diagLst,
+    List<scalarField>& upperLst,
+    List<scalarField>& lowerLst,
+    List<scalarField>& extValLst
 )
 {
-    // diagLst[myGpuWorldRank_] = diag;
-    // Pstream::gatherList(diagLst, UPstream::msgType(), gpuWorld_);
-    MPI_Gather((void *) diag, nLocalRows, MPI_REAL,
-               (void *) diagLst.cdata(), nLocalRows, MPI_REAL, 0,
-               PstreamGlobals::MPICommunicators_[gpuWorld_]);
+    diagLst[myGpuWorldRank_] = diag;
+    Pstream::gatherList(diagLst, UPstream::msgType(), gpuWorld_);
+    // MPI_Gather((void *) diag, nLocalRows, MPI_REAL,
+    //            (void *) diagLst.cdata(), nLocalRows, MPI_REAL, 0,
+    //            PstreamGlobals::MPICommunicators_[gpuWorld_]);
     
-    // upperLst[myGpuWorldRank_] = upper;
-    // Pstream::gatherList(upperLst, UPstream::msgType(), gpuWorld_);
-    MPI_Gather((void *) upper, nLocalIntFaces, MPI_REAL,
-               (void *) upperLst.cdata(), nLocalIntFaces, MPI_REAL, 0,
-               PstreamGlobals::MPICommunicators_[gpuWorld_]);
+    upperLst[myGpuWorldRank_] = upper;
+    Pstream::gatherList(upperLst, UPstream::msgType(), gpuWorld_);
+    // MPI_Gather((void *) upper, nLocalIntFaces, MPI_REAL,
+    //            (void *) upperLst.cdata(), nLocalIntFaces, MPI_REAL, 0,
+    //            PstreamGlobals::MPICommunicators_[gpuWorld_]);
 
-    // lowerLst[myGpuWorldRank_] = lower;
-    // Pstream::gatherList(lowerLst, UPstream::msgType(), gpuWorld_);
-    MPI_Gather((void *) lower, nLocalIntFaces, MPI_REAL,
-               (void *) lowerLst.cdata(), nLocalIntFaces, MPI_REAL, 0,
-               PstreamGlobals::MPICommunicators_[gpuWorld_]);
+    lowerLst[myGpuWorldRank_] = lower;
+    Pstream::gatherList(lowerLst, UPstream::msgType(), gpuWorld_);
+    // MPI_Gather((void *) lower, nLocalIntFaces, MPI_REAL,
+    //            (void *) lowerLst.cdata(), nLocalIntFaces, MPI_REAL, 0,
+    //            PstreamGlobals::MPICommunicators_[gpuWorld_]);
 
-    // extValLst[myGpuWorldRank_] = extVal;
-    // Pstream::gatherList(extValLst, UPstream::msgType(), gpuWorld_);
-    MPI_Gather((void *) extVal, nLocalExtVals, MPI_REAL,
-               (void *) extValLst.cdata(), nLocalExtVals, MPI_REAL, 0,
-               PstreamGlobals::MPICommunicators_[gpuWorld_]);
+    extValLst[myGpuWorldRank_] = extVal;
+    Pstream::gatherList(extValLst, UPstream::msgType(), gpuWorld_);
+    // MPI_Gather((void *) extVal, nLocalExtVals, MPI_REAL,
+    //            (void *) extValLst.cdata(), nLocalExtVals, MPI_REAL, 0,
+    //            PstreamGlobals::MPICommunicators_[gpuWorld_]);
 
     Pstream::barrier(gpuWorld_);
 }
@@ -489,22 +492,22 @@ void Foam::csrMatrix::computePermutation
           label& nnzExt
 )
 {
-    // const labelList& own = addr.lowerAddr();
-    // const labelList& neigh = addr.upperAddr();
+    const labelList& hostOwn = addr.lowerAddr();
+    const labelList& hostNeigh = addr.upperAddr();
     const label* own = nullptr;
 	const label* neigh = nullptr;
 
-	const label* hostOwn = addr.lowerAddr().cdata();
-	const label* hostNeigh = addr.upperAddr().cdata();
+	// const label* hostOwn = addr.lowerAddr().cdata();
+	// const label* hostNeigh = addr.upperAddr().cdata();
 
 	const label nIntFaces = addr.lowerAddr().size();
     const label nCells = addr.size();
 
 	std::visit([&hostOwn, &own, nIntFaces](const auto& exec)
-               { own = exec.template copyFromFoam<label>(nIntFaces,hostOwn); },
+               { own = exec.template copyFromFoam<label>(nIntFaces,hostOwn.cdata()); },
                csrMatExec_);
 	std::visit([&hostNeigh, &neigh, nIntFaces](const auto& exec)
-               { neigh = exec.template copyFromFoam<label>(nIntFaces,hostNeigh); },
+               { neigh = exec.template copyFromFoam<label>(nIntFaces,hostNeigh.cdata()); },
                csrMatExec_);
 
     const globalIndex globalNumbering(nCells);
@@ -586,20 +589,18 @@ void Foam::csrMatrix::computePermutation
 
     const label* extRows = nullptr;
     const label* extCols = nullptr;
-    const label* fomaExtRowsPtr = foamExtRows.cdata();
-    const label* foamExtColsPtr = foamExtCols.cdata();
-	std::visit([&fomaExtRowsPtr, &extRows, nnzExt](const auto& exec)
-               { extRows = exec.template copyFromFoam<label>(nnzExt,fomaExtRowsPtr); },
+	std::visit([&foamExtRows, &extRows, nnzExt](const auto& exec)
+               { extRows = exec.template copyFromFoam<label>(nnzExt,foamExtRows.cdata()); },
                csrMatExec_);
-	std::visit([&foamExtColsPtr, &extCols, nnzExt](const auto& exec)
-               { extCols = exec.template copyFromFoam<label>(nnzExt,foamExtColsPtr); },
+	std::visit([&foamExtCols, &extCols, nnzExt](const auto& exec)
+               { extCols = exec.template copyFromFoam<label>(nnzExt,foamExtCols.cdata()); },
                csrMatExec_);
 
     label totNnz;
-    List<const label*> ownLst(gpuWorldSize_);
-    List<const label*> neighLst(gpuWorldSize_);
-    List<const label*> extColsLst(gpuWorldSize_);
-    List<const label*> extRowsLst(gpuWorldSize_);
+    List<labelList> ownLst(gpuWorldSize_);
+    List<labelList> neighLst(gpuWorldSize_);
+    List<labelList> extColsLst(gpuWorldSize_);
+    List<labelList> extRowsLst(gpuWorldSize_);
     labelList* consDiagOffGlob = nullptr;
     labelList* consLowOffGlob = nullptr;
     labelList* consUppOffGlob = nullptr;
@@ -610,8 +611,8 @@ void Foam::csrMatrix::computePermutation
         consLowOffGlob = new labelList(gpuWorldSize_);
         consUppOffGlob = new labelList(gpuWorldSize_);
         
-        initializeConsolidation(nIntFaces, nnzExt, diagIndexGlobal, lowOffGlobal, uppOffGlobal,
-                                own, neigh, extRows, extCols, totNnz,
+        initializeConsolidation(nCells, nIntFaces, nnzExt, diagIndexGlobal, lowOffGlobal, uppOffGlobal,
+                                hostOwn, hostNeigh, foamExtRows, foamExtCols, totNnz,
                                 consDiagOffGlob, consLowOffGlob, consUppOffGlob,
                                 ownLst, neighLst, extRowsLst, extColsLst);
     }
@@ -623,17 +624,19 @@ void Foam::csrMatrix::computePermutation
 
     if(gpuProc_)
     {
+        nOwnerStart_ = nConsRows_ + 1;
+        nLocalNz_ = totNnz;
         // ownerStartPtr_ = new labelList(nConsRows_+1, Foam::Zero);
         // ldu2csrPerm_ = new labelList(totNnz);
         // colIndicesPtr_ = new labelList(totNnz);
         std::visit([this](const auto& exec)
-               { this->ownerStartPtr_ = exec.template alloc<label>(this->nConsRows_+1, 0); },
+               { this->ownerStartPtr_ = exec.template alloc<label>(this->nOwnerStart_, 0); },
                csrMatExec_);
         std::visit([this, totNnz](const auto& exec)
                { this->ldu2csrPerm_ = exec.template alloc<label>(totNnz); },
                csrMatExec_);
         std::visit([this, totNnz](const auto& exec)
-               { this->ldu2csrPerm_ = exec.template alloc<label>(totNnz); },
+               { this->colIndicesPtr_ = exec.template alloc<label>(totNnz); },
                csrMatExec_);
 
         // labelList rowIndices(totNnz, Zero);
@@ -658,8 +661,8 @@ void Foam::csrMatrix::computePermutation
                csrMatExec_);
 
         // Initialize: tmpPerm = [0, 1, ... totNnz-1]
-        //             rowIndicesTmp = [0, ... nCells-1, (owner), (neighbour), (extrows)]
-        //             colIndicesTmp = [0, ... nCells-1, (neighbour), (owner), (extcols)]
+        //             rowIndicesTmp = [0, ... nCconsRow-1, (owner), (neighbour), (extrows)]
+        //             colIndicesTmp = [(0, ... nRows0-1), ... (0, ... nRowsN-1), (neighbour), (owner), (extcols)]
         initializeSequence(totNnz, tmpPerm);
         initializeSequence(nConsRows_, rowIndicesTmp);
         
@@ -667,6 +670,9 @@ void Foam::csrMatrix::computePermutation
         {            
             for(label i=0; i<gpuWorldSize_; ++i)
             {
+                initializeSequence(rowsConsDispPtr_[i+1] - rowsConsDispPtr_[i],
+                                   &colIndicesTmp[rowsConsDispPtr_[i]]);
+
                 initializeAddressingExt
                 (
                     nConsRows_,
@@ -674,16 +680,16 @@ void Foam::csrMatrix::computePermutation
                     rowsConsDispPtr_[i+1] - rowsConsDispPtr_[i],
                     intFacesConsDispPtr_[i+1] - intFacesConsDispPtr_[i],
                     extNzConsDispPtr_[i+1] - extNzConsDispPtr_[i],
-                    ownLst[i],
-                    neighLst[i],
-                    extRowsLst[i],
-                    extColsLst[i],
+                    ownLst[i].cdata(),
+                    neighLst[i].cdata(),
+                    extRowsLst[i].cdata(),
+                    extColsLst[i].cdata(),
                     rowIndicesTmp,
                     colIndicesTmp,
                     rowsConsDispPtr_[i],
                     intFacesConsDispPtr_[i],
                     extNzConsDispPtr_[i]
-                );             
+                );
 
                 localToConsRowIndex
                 (
@@ -695,7 +701,7 @@ void Foam::csrMatrix::computePermutation
                     extNzConsDispPtr_[i],
                     rowsConsDispPtr_[i],
                     rowIndicesTmp
-                );        
+                );
             }
         }
         else
@@ -714,8 +720,7 @@ void Foam::csrMatrix::computePermutation
                 rowIndicesTmp,
                 colIndicesTmp
             );
-        }
-        
+        }       
 
         // Compute sorting to obtain permutation
         computeSorting
@@ -906,9 +911,9 @@ void Foam::csrMatrix:: applyPermutation
 
     foamExtVals.negate();
 
-    const scalar * foamDiag = lduMatrix.diag().cdata();
-    const scalar * foamUpper = lduMatrix.upper().cdata();
-    const scalar * foamLower = lduMatrix.lower().cdata();
+    const scalarField& foamDiag = lduMatrix.diag();
+    const scalarField& foamUpper = lduMatrix.upper();
+    const scalarField& foamLower = lduMatrix.lower();
 
     label nIntFaces = lduMatrix.upper().size();
     label nCells = lduMatrix.diag().size();
@@ -920,13 +925,13 @@ void Foam::csrMatrix:: applyPermutation
     const scalar * extVals = nullptr;
 
     std::visit([&foamDiag, &diag, nCells](const auto& exec)
-               { diag = exec.template copyFromFoam<scalar>(nCells, foamDiag); },
+               { diag = exec.template copyFromFoam<scalar>(nCells, foamDiag.cdata()); },
                csrMatExec_);
     std::visit([&foamUpper, &upper, nIntFaces](const auto& exec)
-               { upper = exec.template copyFromFoam<scalar>(nIntFaces, foamUpper); },
+               { upper = exec.template copyFromFoam<scalar>(nIntFaces, foamUpper.cdata()); },
                csrMatExec_);
     std::visit([&foamLower, &lower, nIntFaces](const auto& exec)
-               { lower = exec.template copyFromFoam<scalar>(nIntFaces, foamLower); },
+               { lower = exec.template copyFromFoam<scalar>(nIntFaces, foamLower.cdata()); },
                csrMatExec_);
     std::visit([&foamExtVals, &extVals, nnzExt](const auto& exec)
                { extVals = exec.template copyFromFoam<scalar>(nnzExt, foamExtVals.cdata()); },
@@ -935,15 +940,15 @@ void Foam::csrMatrix:: applyPermutation
     //- Compute global number of equations
     nGlobalCells = returnReduce(nCells, sumOp<label>());
 
-    List<const scalar*> diagLst(gpuWorldSize_);
-    List<const scalar*> lowerLst(gpuWorldSize_);
-    List<const scalar*> upperLst(gpuWorldSize_);
-    List<const scalar*> extValLst(gpuWorldSize_);
+    List<scalarField> diagLst(gpuWorldSize_);
+    List<scalarField> lowerLst(gpuWorldSize_);
+    List<scalarField> upperLst(gpuWorldSize_);
+    List<scalarField> extValLst(gpuWorldSize_);
 
     if(consolidationStatus_ == ConsolidationStatus::initialized)
     {
         initializeValuesConsolidation(nCells, nIntFaces, nnzExt,
-                                      diag, upper, lower, extVals,
+                                      foamDiag, foamUpper, foamLower, foamExtVals,
                                       diagLst, upperLst, lowerLst, extValLst);
         
         totNnz = nConsRows_ + 2*nConsIntFaces_ + nConsExtNz_;
@@ -981,10 +986,10 @@ void Foam::csrMatrix:: applyPermutation
                     rowsConsDispPtr_[i+1] - rowsConsDispPtr_[i],
                     intFacesConsDispPtr_[i+1] - intFacesConsDispPtr_[i],
                     extNzConsDispPtr_[i+1] - extNzConsDispPtr_[i],
-                    diagLst[i],
-                    upperLst[i],
-                    lowerLst[i],
-                    extValLst[i],
+                    diagLst[i].cdata(),
+                    upperLst[i].cdata(),
+                    lowerLst[i].cdata(),
+                    extValLst[i].cdata(),
                     valuesTmp,
                     rowsConsDispPtr_[i],
                     intFacesConsDispPtr_[i],

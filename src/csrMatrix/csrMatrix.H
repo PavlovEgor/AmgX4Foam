@@ -143,23 +143,24 @@ protected:
     //- Protected functions
         void initializeConsolidation
         (
+            const label nLocalRows,
             const label nLocalIntFaces,
             const label nLocalExtNz,
             const label diagIndexGlobal,
             const label lowOffGlobal,
             const label uppOffGlobal,
-            const label* own,
-            const label* neigh,
-            const label* extRows,
-            const label* extCols,
-                  label& nConsTotNz,
-                  labelList* consDiagOffGlob,
-                  labelList* consLowOffGlob, 
-                  labelList* consUppOffGlob,
-                  List<const label*>& ownLst,
-                  List<const label*>& neighLst,
-                  List<const label*>& extRowsLst,
-                  List<const label*>& extColsLst
+            const labelList& own,
+            const labelList& neigh,
+            const labelList& extRows,
+            const labelList& extCols,
+                label& nConsTotNz,
+                labelList* consDiagOffGlob,
+                labelList* consLowOffGlob, 
+                labelList* consUppOffGlob,
+                List<labelList>& ownLst,
+                List<labelList>& neighLst,
+                List<labelList>& extRowsLst,
+                List<labelList>& extColsLst
         );
 
         void initializeSequence
@@ -251,14 +252,14 @@ protected:
             const label nLocalRows,
             const label nLocalIntFaces,
             const label nLocalExtVals,
-            const scalar * diag,
-            const scalar * upper,
-            const scalar * lower,
-            const scalar * extVal,
-            List<const scalar*>& diagLst,
-            List<const scalar*>& upperLst,
-            List<const scalar*>& lowerLst,
-            List<const scalar*>& extValLst
+            const scalarField& diag,
+            const scalarField& upper,
+            const scalarField& lower,
+            const scalarField& extVal,
+            List<scalarField>& diagLst,
+            List<scalarField>& upperLst,
+            List<scalarField>& lowerLst,
+            List<scalarField>& extValLst
         );
            
         void initializeValue

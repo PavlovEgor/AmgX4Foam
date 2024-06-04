@@ -93,7 +93,7 @@ void Foam::cpuCsrMatrixExecutor::initializeAddressing
 (
     const label   nConsRows,
     const label   nConsIntFaces,
-    const label   nRows,
+    const label   nRows, // INUTILE: da togliere
     const label   nInternalFaces,
     const label * const owner,
     const label * const neighbour,
@@ -105,8 +105,6 @@ void Foam::cpuCsrMatrixExecutor::initializeAddressing
 {
     // Initialize: rowIndecesTmp = [0, ... nConsRows, (owner), (neighbour)]
     //             colIndecesTmp = [0, ... nRows1, .. 0 ... nRowsN, (neighbour), (owner)]
-    for(label i=0; i<nRows; ++i) colIndTmp[rowsDispl + i] = i;
-
     for(label i=0; i<nInternalFaces; ++i)
     {
         rowIndTmp[nConsRows + intFacesDispl + i] = owner[i];

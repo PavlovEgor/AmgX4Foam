@@ -253,7 +253,7 @@ inline void Foam::csrMatrix::localToConsRowIndex
         offset,
         &rowIndices
 	 ]
-	 (const auto& exec){ exec.localToGlobalColIndices
+	 (const auto& exec){ exec.localToConsRowIndex
                             (
                                 nConsRows,
                                 nConsIntFaces,
