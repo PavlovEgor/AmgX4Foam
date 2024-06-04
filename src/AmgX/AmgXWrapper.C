@@ -101,6 +101,8 @@ void Foam::AmgXWrapper::initialize(
 
     dataOrigin_ = dataLocation;
 
+    gpuProc_ = true;
+
     isInitialised = true;
 }
 
