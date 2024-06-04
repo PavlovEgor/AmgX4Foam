@@ -271,7 +271,7 @@ void cudaApplyValuePermutation
 
     if(i < length)
     {
-        dstArray[permArray[i/blockLen]] = srcArray[i + i % blockLen];
+        dstArray[permArray[i]] = srcArray[i];
     }
 } 
 //NOTA: this function (when csrAdressing will be joined back to csrMatrix) will 
@@ -459,9 +459,17 @@ void Foam::cudaCsrMatrixExecutor::computeSorting
           label * rowInd,
           label * ldu2csr
 ) const
-{   
+{
+	label* permTmp;
+
+    int err = CHECK_CUDA_ERROR(cudaMalloc((void**)&permTmp, totNnz*sizeof(label)));
+    if (err != 0)
+    {
+        FatalErrorInFunction << "ERROR: cudaMalloc returned " << err << abort(FatalError);
+    }
+
     cub::DoubleBuffer<label> d_keys(rowIndTmp, rowInd);
-    cub::DoubleBuffer<label> d_values(tmpPerm, ldu2csr);
+    cub::DoubleBuffer<label> d_values(tmpPerm, permTmp);
 
     // Determine temporary device storage requirements for sort pairs
     void * tempStorage = NULL;
@@ -473,13 +481,13 @@ void Foam::cudaCsrMatrixExecutor::computeSorting
     cub::DeviceRadixSort::SortPairs(tempStorage, tempStorageBytes, d_keys, d_values, totNnz);
 
     rowInd = d_keys.Current();
-    tmpPerm = d_values.Current();
+    permTmp = d_values.Current();
 
     label numBlocks = (totNnz + NUM_THREADS_PER_BLOCK - 1) / NUM_THREADS_PER_BLOCK;
     cudaSetLdu2Csr<<<numBlocks, NUM_THREADS_PER_BLOCK>>>
     (
         totNnz,
-        tmpPerm,
+        permTmp,
         ldu2csr
     );
     cudaDeviceSynchronize();
