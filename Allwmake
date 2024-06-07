@@ -16,6 +16,18 @@ printHelp()
     echo ""
 };
 
+# Create files list
+createFileList()
+{
+    cd Make
+    if [[ "${have_cuda}" == "true" ]]; then :
+        cat filesCuda filesIn > files
+    else
+        cat filesCpu filesIn > files
+    fi
+    cd ..
+};
+
 #------------------------------------------------------------------------------
 # Initialize variables
 #------------------------------------------------------------------------------
@@ -47,7 +59,6 @@ do
         # Compile cuda version
         -cu | -cuda*)
             export have_cuda=true
-            echo "Detected CUDA flag, setting have_cuda=$have_cuda"
             case "$2" in
             [0-9]*)
                 if [[ "$2" -ge 5 ]] && [[ "$2" -le 9 ]]; then :
@@ -111,12 +122,12 @@ if [[ ${LAUNCH_WCLEAN} == "true" ]]; then :
 
     # Clean zeptoFOAM library
     cd src
-        if [[ ! -f Make/files ]]; then :
-            createFileList
-        fi
         wclean
         rm -rf lnInclude
         rm -rf ${FOAM_USER_LIBBIN}/libEscapeFromFoam.so
+        if [[ -f Make/files ]]; then :
+            rm Make/files
+        fi
     cd ..
 
     # Exit script without compiling
@@ -130,10 +141,9 @@ fi
 
 cd ${0%/*} || exit 1                         # Run from this directory
 targetType=libso
-#. "${WM_PROJECT_DIR:?}"/wmake/scripts/AllwmakeParseArguments
 
-#------------------------------------------------------------------------------
 cd src
+createFileList
 wmake ${WM_ARGUMENTS} $targetType
 cd ..
 
