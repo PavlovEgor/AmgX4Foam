@@ -173,13 +173,11 @@ protected:
         (
             const label   nConsRows,
             const label   nConsIntFaces,
-            const label   nRows,
             const label   nInternalFaces,
             const label * const owner,
             const label * const neighbour,
                   label * rowIndTmp,
                   label * colIndTmp,
-            const label   rowsDispl = 0,
             const label   intFacesDispl = 0
         );
 
@@ -187,7 +185,6 @@ protected:
         (
             const label   nConsRows,
             const label   nConsIntFaces,
-            const label   nRows,
             const label   nInternalFaces,
             const label   nnzExt,
             const label * const owner,
@@ -196,7 +193,6 @@ protected:
             const label * const extCols,
                   label * rowIndTmp,
                   label * colIndTmp,
-            const label   rowsDispl =0,
             const label   intFacesDispl = 0,
             const label   extNnzDispl = 0
         );

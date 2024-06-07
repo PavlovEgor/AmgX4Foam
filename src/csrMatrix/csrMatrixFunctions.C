@@ -58,13 +58,11 @@ inline void Foam::csrMatrix::initializeAddressing
 (
     const label   nConsRows,
     const label   nConsIntFaces,
-    const label   nRows,
     const label   nInternalFaces,
     const label * const owner,
     const label * const neighbour,
           label * rowIndTmp,
           label * colIndTmp,
-    const label   rowsDispl,
     const label   intFacesDispl
 )
 {
@@ -72,26 +70,22 @@ inline void Foam::csrMatrix::initializeAddressing
 	([
         nConsRows,
         nConsIntFaces,
-        nRows,
         nInternalFaces,
         &owner,
         &neighbour,
         &rowIndTmp,
         &colIndTmp,
-        rowsDispl,
         intFacesDispl
 	 ]
 	 (const auto& exec){ exec.initializeAddressing
                             (
                                 nConsRows,
                                 nConsIntFaces,
-                                nRows,
                                 nInternalFaces,
                                 owner,
                                 neighbour,
                                 rowIndTmp,
                                 colIndTmp,
-                                rowsDispl,
                                 intFacesDispl
 					        );
                        },
@@ -103,7 +97,6 @@ inline void Foam::csrMatrix::initializeAddressingExt
 (
     const label   nConsRows,
     const label   nConsIntFaces,
-    const label   nRows,
     const label   nInternalFaces,
     const label   nnzExt,
     const label * const owner,
@@ -112,7 +105,6 @@ inline void Foam::csrMatrix::initializeAddressingExt
     const label * const extCols,
           label * rowIndTmp,
           label * colIndTmp,
-    const label   rowsDispl,
     const label   intFacesDispl,
     const label   extNnzDispl 
 )
@@ -121,7 +113,6 @@ inline void Foam::csrMatrix::initializeAddressingExt
 	([
         nConsRows,
         nConsIntFaces,
-        nRows,
         nInternalFaces,
         nnzExt,
         &owner,
@@ -130,7 +121,6 @@ inline void Foam::csrMatrix::initializeAddressingExt
         &extCols,
         &rowIndTmp,
         &colIndTmp,
-        rowsDispl,
         intFacesDispl,
         extNnzDispl
 	 ]
@@ -138,7 +128,6 @@ inline void Foam::csrMatrix::initializeAddressingExt
                            (
                                 nConsRows,
                                 nConsIntFaces,
-                                nRows,
                                 nInternalFaces,
                                 nnzExt,
                                 owner,
@@ -147,7 +136,6 @@ inline void Foam::csrMatrix::initializeAddressingExt
                                 extCols,
                                 rowIndTmp,
                                 colIndTmp,
-                                rowsDispl,
                                 intFacesDispl,
                                 extNnzDispl
 					       );

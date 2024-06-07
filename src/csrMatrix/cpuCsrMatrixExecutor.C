@@ -95,13 +95,11 @@ void Foam::cpuCsrMatrixExecutor::initializeAddressing
 (
     const label   nConsRows,
     const label   nConsIntFaces,
-    const label   nRows, // INUTILE: da togliere
     const label   nInternalFaces,
     const label * const owner,
     const label * const neighbour,
           label * rowIndTmp,
           label * colIndTmp,
-    const label   rowsDispl, //default =0
     const label   intFacesDispl //default =0
 ) const
 {
@@ -123,7 +121,6 @@ void Foam::cpuCsrMatrixExecutor::initializeAddressingExt
 (
     const label   nConsRows,
     const label   nConsIntFaces,
-    const label   nRows,
     const label   nInternalFaces,
     const label   nnzExt,
     const label * const owner,
@@ -132,7 +129,6 @@ void Foam::cpuCsrMatrixExecutor::initializeAddressingExt
     const label * const extCols,
           label * rowIndTmp,
           label * colIndTmp,
-    const label   rowsDispl, // default = 0
     const label   intFacesDispl, // default = 0
     const label   extNnzDispl // default = 0
 ) const
@@ -141,13 +137,11 @@ void Foam::cpuCsrMatrixExecutor::initializeAddressingExt
     (
         nConsRows,
         nConsIntFaces,
-        nRows,
         nInternalFaces,
         owner,
         neighbour,
         rowIndTmp,
         colIndTmp,
-        rowsDispl,
         intFacesDispl
     );
 

@@ -437,7 +437,6 @@ void Foam::csrMatrix::computePermutation(const lduAddressing * addr)
     (
         nCells,
         nIntFaces,
-        nCells,
         nIntFaces,
         own,
         neigh,
@@ -677,7 +676,6 @@ void Foam::csrMatrix::computePermutation
                 (
                     nConsRows_,
                     nConsIntFaces_,
-                    rowsConsDispPtr_[i+1] - rowsConsDispPtr_[i],
                     intFacesConsDispPtr_[i+1] - intFacesConsDispPtr_[i],
                     extNzConsDispPtr_[i+1] - extNzConsDispPtr_[i],
                     ownLst[i].cdata(),
@@ -686,7 +684,6 @@ void Foam::csrMatrix::computePermutation
                     extColsLst[i].cdata(),
                     rowIndicesTmp,
                     colIndicesTmp,
-                    rowsConsDispPtr_[i],
                     intFacesConsDispPtr_[i],
                     extNzConsDispPtr_[i]
                 );
@@ -710,7 +707,6 @@ void Foam::csrMatrix::computePermutation
             (
                 nCells,
                 nIntFaces,
-                nCells,
                 nIntFaces,
                 nnzExt,
                 own,
