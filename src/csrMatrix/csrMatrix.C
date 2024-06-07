@@ -241,15 +241,15 @@ void Foam::csrMatrix::initializeConsolidation
     // intFacesConsDispPtr_ = new labelList(gpuWorldSize_ + 1, Foam::Zero);
     // extNzConsDispPtr_ = new labelList(gpuWorldSize_ + 1, Foam::Zero);
     std::visit([this](const auto& exec)
-               { this->rowsConsDispPtr_ = exec.template alloc<label>(this->gpuWorldSize_+1, 0); },
+               { this->rowsConsDispPtr_ = exec.template allocZero<label>(this->gpuWorldSize_+1); },
                csrMatExec_);
 
     std::visit([this](const auto& exec)
-               { this->intFacesConsDispPtr_ = exec.template alloc<label>(this->gpuWorldSize_+1, 0); },
+               { this->intFacesConsDispPtr_ = exec.template allocZero<label>(this->gpuWorldSize_+1); },
                csrMatExec_);
 
     std::visit([this](const auto& exec)
-               { this->extNzConsDispPtr_ = exec.template alloc<label>(this->gpuWorldSize_+1, 0); },
+               { this->extNzConsDispPtr_ = exec.template allocZero<label>(this->gpuWorldSize_+1); },
                csrMatExec_);
 
     labelList rowsConsDispTmp(gpuWorldSize_);
@@ -630,7 +630,7 @@ void Foam::csrMatrix::computePermutation
         // ldu2csrPerm_ = new labelList(totNnz);
         // colIndicesPtr_ = new labelList(totNnz);
         std::visit([this](const auto& exec)
-               { this->ownerStartPtr_ = exec.template alloc<label>(this->nOwnerStart_, 0); },
+               { this->ownerStartPtr_ = exec.template allocZero<label>(this->nOwnerStart_); },
                csrMatExec_);
         std::visit([this, totNnz](const auto& exec)
                { this->ldu2csrPerm_ = exec.template alloc<label>(totNnz); },
@@ -648,7 +648,7 @@ void Foam::csrMatrix::computePermutation
         label* rowIndicesTmp = nullptr;
         label* colIndicesTmp = nullptr;
         std::visit([&rowIndices, totNnz](const auto& exec)
-               { rowIndices = exec.template alloc<label>(totNnz, 0); },
+               { rowIndices = exec.template allocZero<label>(totNnz); },
                csrMatExec_);
         std::visit([&tmpPerm, totNnz](const auto& exec)
                { tmpPerm = exec.template alloc<label>(totNnz); },

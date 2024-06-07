@@ -46,14 +46,16 @@ Type* Foam::cpuCsrMatrixExecutor::alloc
 }
 
 template<class Type>
-Type* Foam::cpuCsrMatrixExecutor::alloc
+Type* Foam::cpuCsrMatrixExecutor::allocZero
 (
-    Foam::label size,
-    Type value
+    Foam::label size
 ) const
 {
     Type* ptr = new Type[size];
-    for(Foam::label i=0; i < size; ++i)  ptr[i] = value;
+    for(label i=0; i<size; i++)
+    {
+    	ptr[i] = Type(0); //vi sy  Foam::Zero);
+    }
 	return ptr;
 }
 
@@ -181,7 +183,7 @@ void Foam::cpuCsrMatrixExecutor::computeSorting
     for(label i=0; i<totNnz; ++i)
     {
         rowInd[i] = pairVect[i].first;
-        ldu2csr[i] = pairVect[i].second;
+        ldu2csr[pairVect[i].second] = i;
     }
 }
 
@@ -254,7 +256,7 @@ void Foam::cpuCsrMatrixExecutor::applyAddressingPermutation
     ownStart[0] = 0;
     for(label i=0; i<totNnz; ++i)
     {
-        colInd[i] = colIndTmp[ldu2csr[i]];
+        colInd[ldu2csr[i]] = colIndTmp[i];
         if(curRow < rowInd[i])
         {
             ownStart[rowInd[i]] = i;
@@ -347,7 +349,7 @@ void Foam::cpuCsrMatrixExecutor::applyValuePermutation
     {
         for(label j=0; j<blockLen; ++j)
         {
-            values[i*blockLen + j] = valuesTmp[ldu2csr[i]*blockLen + j];
+            values[ldu2csr[i]*blockLen + j] = valuesTmp[i*blockLen + j];
         }
     }
 }
@@ -361,10 +363,9 @@ void Foam::cpuCsrMatrixExecutor::applyValuePermutation
     (                                                                     \
         Foam::label size                                                  \
     ) const;                                                              \
-    template Type* Foam::cpuCsrMatrixExecutor::alloc<Type>                \
+    template Type* Foam::cpuCsrMatrixExecutor::allocZero<Type>            \
     (                                                                     \
-        Foam::label size,                                                 \
-        Type value                                                        \
+        Foam::label size                                                  \
     ) const;                                                              \
     template const Type* Foam::cpuCsrMatrixExecutor::copyFromFoam<Type>   \
     (                                                                     \
