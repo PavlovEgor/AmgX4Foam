@@ -114,13 +114,13 @@ protected:
         scalar* valuesPtr_;
 
         //- Rows diplacement between consolidated processes
-        label * rowsConsDispPtr_;
+        labelList* rowsConsDispPtr_;
 
         //- Internal faces displcament between consolidated processes
-        label * intFacesConsDispPtr_;
+        labelList* intFacesConsDispPtr_;
     
         //- External values displcament between consolidated processes
-        label * extNzConsDispPtr_;
+        labelList* extNzConsDispPtr_;
 
         //- Flag for computed permutation
         bool       hasPermutation_ = false;
@@ -157,10 +157,10 @@ protected:
                 labelList* consDiagOffGlob,
                 labelList* consLowOffGlob, 
                 labelList* consUppOffGlob,
-                List<labelList>& ownLst,
-                List<labelList>& neighLst,
-                List<labelList>& extRowsLst,
-                List<labelList>& extColsLst
+                label * &ownCons,
+                label * &neighCons,
+                label * &extRowsCons,
+                label * &extColsConst
         );
 
         void initializeSequence
@@ -173,28 +173,23 @@ protected:
         (
             const label   nConsRows,
             const label   nConsIntFaces,
-            const label   nInternalFaces,
             const label * const owner,
             const label * const neighbour,
                   label * rowIndTmp,
-                  label * colIndTmp,
-            const label   intFacesDispl = 0
+                  label * colIndTmp
         );
 
         void initializeAddressingExt
         (
             const label   nConsRows,
             const label   nConsIntFaces,
-            const label   nInternalFaces,
-            const label   nnzExt,
+            const label   nConsExtNz,
             const label * const owner,
             const label * const neighbour,
             const label * const extRows,
             const label * const extCols,
                   label * rowIndTmp,
-                  label * colIndTmp,
-            const label   intFacesDispl = 0,
-            const label   extNnzDispl = 0
+                  label * colIndTmp
         );
 
         void computeSorting
@@ -384,9 +379,19 @@ public:
                 return nConsRows_;
             }
 
-            const label* rowsConsDisp() const
+            const labelList& rowsConsDisp() const
             {
-                return rowsConsDispPtr_;
+                return *rowsConsDispPtr_;
+            }
+
+            const labelList& intFaceConsDisp() const
+            {
+                return *intFacesConsDispPtr_;
+            }
+
+            const labelList& extNzConsDisp() const
+            {
+                return *extNzConsDispPtr_;
             }
 
             //- Return true if the permutation has been computed

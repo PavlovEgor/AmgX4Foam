@@ -58,35 +58,29 @@ inline void Foam::csrMatrix::initializeAddressing
 (
     const label   nConsRows,
     const label   nConsIntFaces,
-    const label   nInternalFaces,
     const label * const owner,
     const label * const neighbour,
           label * rowIndTmp,
-          label * colIndTmp,
-    const label   intFacesDispl
+          label * colIndTmp
 )
 {
     std::visit
 	([
         nConsRows,
         nConsIntFaces,
-        nInternalFaces,
         &owner,
         &neighbour,
         &rowIndTmp,
-        &colIndTmp,
-        intFacesDispl
+        &colIndTmp
 	 ]
 	 (const auto& exec){ exec.initializeAddressing
                             (
                                 nConsRows,
                                 nConsIntFaces,
-                                nInternalFaces,
                                 owner,
                                 neighbour,
                                 rowIndTmp,
-                                colIndTmp,
-                                intFacesDispl
+                                colIndTmp
 					        );
                        },
      csrMatExec_);
@@ -97,47 +91,38 @@ inline void Foam::csrMatrix::initializeAddressingExt
 (
     const label   nConsRows,
     const label   nConsIntFaces,
-    const label   nInternalFaces,
-    const label   nnzExt,
+    const label   nConsExtNz,
     const label * const owner,
     const label * const neighbour,
     const label * const extRows,
     const label * const extCols,
           label * rowIndTmp,
-          label * colIndTmp,
-    const label   intFacesDispl,
-    const label   extNnzDispl 
+          label * colIndTmp
 )
 {
     std::visit
 	([
         nConsRows,
         nConsIntFaces,
-        nInternalFaces,
-        nnzExt,
+        nConsExtNz,
         &owner,
         &neighbour,
         &extRows,
         &extCols,
         &rowIndTmp,
-        &colIndTmp,
-        intFacesDispl,
-        extNnzDispl
+        &colIndTmp
 	 ]
 	 (const auto& exec){ exec.initializeAddressingExt
                            (
                                 nConsRows,
                                 nConsIntFaces,
-                                nInternalFaces,
-                                nnzExt,
+                                nConsExtNz,
                                 owner,
                                 neighbour,
                                 extRows,
                                 extCols,
                                 rowIndTmp,
-                                colIndTmp,
-                                intFacesDispl,
-                                extNnzDispl
+                                colIndTmp
 					       );
                        },
      csrMatExec_);

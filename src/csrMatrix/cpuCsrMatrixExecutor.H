@@ -44,6 +44,7 @@ SourceFiles
 
 #include "scalar.H"
 #include "label.H"
+#include "List.H"
 
 namespace Foam
 {
@@ -66,13 +67,16 @@ public:
     Type* allocZero(Foam::label size) const;
 
     template<class Type>
-    const Type* copyFromFoam(Foam::label size, const Type* hostPtr) const;
+    Type* copyFromFoam(Foam::label size, const Type* hostPtr) const;
 
     template<class Type>
     void clear(Type* ptr) const;
 
     template<class Type>
     void clear(const Type* ptr) const;
+
+    template<class Type>
+    void concatenate(label globSize, List<List<Type>> lst, Type * ptr) const;
 
     void initializeSequence
     (
@@ -84,28 +88,23 @@ public:
     (
         const label   nConsRows,
         const label   nConsIntFaces,
-        const label   nInternalFaces,
         const label * const owner,
         const label * const neighbour,
               label * rowIndTmp,
-              label * colIndTmp,
-        const label   intFacesDispl = 0
+              label * colIndTmp
     ) const;
 
     void initializeAddressingExt
     (
         const label   nConsRows,
         const label   nConsIntFaces,
-        const label   nInternalFaces,
-        const label   nnzExt,
+        const label   nConsExtNz,
         const label * const owner,
         const label * const neighbour,
         const label * const extRows,
         const label * const extCols,
               label * rowIndTmp,
-              label * colIndTmp,
-        const label   intFacesDispl = 0,
-        const label   extNnzDispl = 0
+              label * colIndTmp
     ) const;
 
     void computeSorting
