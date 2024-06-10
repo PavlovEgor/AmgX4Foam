@@ -35,8 +35,8 @@ License
 
 #include "globalIndex.H"
 
-// #include <iostream>
-// #include <fstream>
+#include <iostream>
+#include <fstream>
 
 // * * * * * * * * * * * * * * Static Data Members * * * * * * * * * * * * * //
 
@@ -125,26 +125,32 @@ Foam::solverPerformance Foam::AmgXSolver::solve
         Amat.applyPermutation(matrix_, interfaceBouCoeffs_, nGlobalCells);
     }
 
-    // label nnz = Amat.nLocalNz();
+    label nnz = Amat.nLocalNz();
 
     //- Print matrix converted to check
-    /*string fileName = "ownStart-escape" + std::to_string(Pstream::myProcNo());
+    label * hostOwnStrt = new label[Amat.nOwnerStart()];
+    cudaMemcpy(hostOwnStrt, Amat.ownerStart(), Amat.nOwnerStart()*sizeof(label), cudaMemcpyDeviceToHost);
+    string fileName = "ownStart-escape" + std::to_string(Pstream::myProcNo());
     std::ofstream outFile1(fileName); //, std::ios_base::app);
     outFile1 << "ownerStart:" << nl;
-    for(int i=0; i< Amat.nOwnerStart(); ++i) outFile1 << Amat.ownerStart()[i] << nl;
+    for(int i=0; i< Amat.nOwnerStart(); ++i) outFile1 << hostOwnStrt[i] << nl;
     outFile1.close();
 
+    label * hostColIndices = new label[nnz];
+    cudaMemcpy(hostColIndices, Amat.colIndices(), nnz*sizeof(label), cudaMemcpyDeviceToHost);
     fileName = "colIndices-escape" + std::to_string(Pstream::myProcNo());
     std::ofstream outFile2(fileName);
     outFile2 << "colIndeces:" << nl;
-    for(int i=0; i< nnz; ++i) outFile2 << Amat.colIndices()[i] << nl;
+    for(int i=0; i< nnz; ++i) outFile2 << hostColIndices[i] << nl;
     outFile2.close();
 
+    scalar * hostValues = new scalar[nnz];
+    cudaMemcpy(hostValues, Amat.values(), nnz*sizeof(scalar), cudaMemcpyDeviceToHost);
     fileName = "values-escape" + std::to_string(Pstream::myProcNo());
     std::ofstream outFile3(fileName);
     outFile3 << "values:" << nl;
-    for(int i=0; i< nnz; ++i) outFile3 << Amat.values()[i] << nl;
-    outFile3.close();*/
+    for(int i=0; i< nnz; ++i) outFile3 << hostValues[i] << nl;
+    outFile3.close();
 
     if(!ctx.initialized())
     {

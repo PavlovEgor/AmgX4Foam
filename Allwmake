@@ -23,7 +23,7 @@ createFileList()
     if [[ "${have_cuda}" == "true" ]]; then :
         cat filesCuda filesIn > files
     else
-        cat filesCpu filesIn > files
+        cat filesIn > files
     fi
     cd ..
 };

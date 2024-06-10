@@ -48,17 +48,13 @@ Foam::csrMatrix::csrMatrix(word mode)
     if (mode.starts_with("h"))
     {
         csrMatExec_ = cpuCsrMatrixExecutor();
-	}    
+	}
+#ifdef have_cuda    
     else if (mode.starts_with("d"))
     {
-#ifdef have_cuda
         csrMatExec_ = cudaCsrMatrixExecutor();
-#else
-        FatalErrorInFunction
-            << "'" << mode << "' is not a available, CUDA version not compiled"
-            << exit(FatalError);
-#endif
 	}
+#endif
     else
     {
         FatalErrorInFunction

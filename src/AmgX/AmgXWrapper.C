@@ -391,32 +391,29 @@ void Foam::AmgXWrapper::setOperator
         const void * matValues; // = matrix->values().cdata();
 
         if(dataOrigin_ == "host")
-        {           
-            /*AMGX_pin_memory((void*) matrix->ownerStart().cdata(), (nLocalRows+1)*sizeof(int));
-            AMGX_pin_memory((void*) matrix->colIndices().cdata(), (nLocalNz+1)*sizeof(int));
-            AMGX_pin_memory((void*) matrix->values().cdata(), (nLocalRows+1)*sizeof(double));*/
+        {
             cudaMalloc((void**) &ownStart, sizeof(int)*(nLocalRows+1));
             cudaMalloc((void**) &colInd, sizeof(int)*nLocalNz);
             cudaMalloc((void**) &matValues, sizeof(double)*nLocalNz);
             cudaMemcpy((void*) ownStart, (const void*) matrix->ownerStart(), sizeof(int)*(nLocalRows+1), cudaMemcpyHostToDevice);
             cudaMemcpy((void*) colInd, (const void*) matrix->colIndices(), sizeof(int)*nLocalNz, cudaMemcpyHostToDevice);
             cudaMemcpy((void*) matValues, (const void*) matrix->values(), sizeof(double)*nLocalNz, cudaMemcpyHostToDevice);
-
-            if(matrix->isConsolidated())
-            {
-                label nConsRows = matrix->nConsRows();
-                checkCudaError(cudaMalloc((void**) &pCons_, sizeof(scalar)*nConsRows), "pCons_ cudaMalloc");
-                checkCudaError(cudaMalloc((void**) &rhsCons_, sizeof(scalar)*nConsRows), "rhsCons_ cudamalloc");
-
-                cudaIpcGetMemHandle(&pConsHandle_, pCons_);
-                cudaIpcGetMemHandle(&rhsConsHandle_, rhsCons_);
-            }
         }
         else
         {
             ownStart = matrix->ownerStart();
             colInd = matrix->colIndices();
             matValues = matrix->values();
+        }
+
+        if(matrix->isConsolidated())
+        {
+            label nConsRows = matrix->nConsRows();
+            checkCudaError(cudaMalloc((void**) &pCons_, sizeof(scalar)*nConsRows), "pCons_ cudaMalloc");
+            checkCudaError(cudaMalloc((void**) &rhsCons_, sizeof(scalar)*nConsRows), "rhsCons_ cudamalloc");
+
+            cudaIpcGetMemHandle(&pConsHandle_, pCons_);
+            cudaIpcGetMemHandle(&rhsConsHandle_, rhsCons_);
         }
 
         //- upload matrix A to AmgX
@@ -521,8 +518,9 @@ void Foam::AmgXWrapper::solve
     if(matrix->isConsolidated())
     {       
         consDispl = matrix->rowsConsDisp()[myGpuWorldRank_];
-        cudaMemcpy((void*) &pCons_[consDispl], pscalar, nLocalRows*sizeof(scalar), cudaMemcpyHostToDevice); // cudaMemcpyDefault);
-        checkCudaError(cudaMemcpy((void**) &(rhsCons_[consDispl]), (void*) bscalar, (size_t) (nLocalRows*sizeof(scalar)), cudaMemcpyDefault ), // cudaMemcpyDefault);
+        checkCudaError(cudaMemcpy((void*) &pCons_[consDispl], pscalar, nLocalRows*sizeof(scalar), cudaMemcpyHostToDevice ), // cudaMemcpyDefault);
+                       "psi cudaMemcpy");
+        checkCudaError(cudaMemcpy((void*) &rhsCons_[consDispl], (void*) bscalar, nLocalRows*sizeof(scalar), cudaMemcpyHostToDevice ), // cudaMemcpyDefault);
                        "b cudaMemcpy");
         p = pCons_;
         b = rhsCons_;
