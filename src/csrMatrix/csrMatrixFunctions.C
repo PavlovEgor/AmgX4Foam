@@ -281,41 +281,29 @@ inline void Foam::csrMatrix::initializeValue
 (
     const label   nConsRows,
     const label   nConsIntFaces,
-    const label   nRows,
-    const label   nIntFaces,
     const double * const diag,
     const double * const upper,
     const double * const lower,
-          double * valuesTmp,
-    const label   rowsDisp,
-    const label   intFacesDisp                  
+          double * valuesTmp                
 )
 {
     std::visit
 	([
         nConsRows,
         nConsIntFaces,
-        nRows,
-        nIntFaces,
         &diag,
         &upper,
         &lower,
-        &valuesTmp ,
-        rowsDisp,
-        intFacesDisp
+        &valuesTmp
 	 ]
 	 (const auto& exec){ exec.initializeValue
                            (
                                 nConsRows,
                                 nConsIntFaces,
-                                nRows,
-                                nIntFaces,
                                 diag,
                                 upper,
                                 lower,
-                                valuesTmp,
-                                rowsDisp,
-                                intFacesDisp
+                                valuesTmp
 					       );
                        },
      csrMatExec_);
@@ -326,50 +314,35 @@ inline void Foam::csrMatrix::initializeValueExt
 (
     const label nConsRows,
     const label nConsIntFaces,
-    const label nCells,
-    const label nIntFaces,
-    const label nnzExt,
+    const label nConsExtNz,
     const double * const diag,
     const double * const upper,
     const double * const lower,
     const double * const extValue,
-          double * valuesTmp,
-    const label rowsDisp,
-    const label intFacesDisp,
-    const label extValDisp
+          double * valuesTmp
 )
 {
     std::visit
 	([
         nConsRows,
         nConsIntFaces,
-        nCells,
-        nIntFaces,
-        nnzExt,
+        nConsExtNz,
         &diag,
         &upper,
         &lower,
         &extValue,
-        &valuesTmp,
-        rowsDisp,
-        intFacesDisp,
-        extValDisp
+        &valuesTmp
 	 ]
 	 (const auto& exec){ exec.initializeValueExt
                            (
                                 nConsRows,
                                 nConsIntFaces,
-                                nCells,
-                                nIntFaces,
-                                nnzExt,
+                                nConsExtNz,
                                 diag,
                                 upper,
                                 lower,
                                 extValue,
-                                valuesTmp,
-                                rowsDisp,
-                                intFacesDisp,
-                                extValDisp
+                                valuesTmp
 					       );
                        },
      csrMatExec_);

@@ -282,25 +282,21 @@ void Foam::cpuCsrMatrixExecutor::initializeValue
 (
     const label   nConsRows,
     const label   nConsIntFaces,
-    const label   nRows,
-    const label   nIntFaces,
     const double * const diag,
     const double * const upper,
     const double * const lower,
-          double * valuesTmp,
-    const label   rowsDisp, // default = 0
-    const label   intFacesDisp // default = 0
+          double * valuesTmp
 ) const
 {
-    for(label i=0; i<nRows; ++i)
+    for(label i=0; i<nConsRows; ++i)
     {
-        valuesTmp[rowsDisp + i] = diag[i];
+        valuesTmp[i] = diag[i];
     }
 
-    for(label i=0; i<nIntFaces; ++i)
+    for(label i=0; i<nConsIntFaces; ++i)
     {
-        valuesTmp[nConsRows + intFacesDisp + i] = upper[i];
-        valuesTmp[nConsRows + nConsIntFaces + intFacesDisp + i] = lower[i];
+        valuesTmp[nConsRows + i] = upper[i];
+        valuesTmp[nConsRows + nConsIntFaces + i] = lower[i];
     }
 }
 
@@ -309,17 +305,12 @@ void Foam::cpuCsrMatrixExecutor::initializeValueExt
 (
     const label nConsRows,
     const label nConsIntFaces,
-    const label nCells,
-    const label nIntFaces,
-    const label nnzExt,
+    const label nConsExtNz,
     const double * const diag,
     const double * const upper,
     const double * const lower,
     const double * const extValue,
-          double * valuesTmp,
-    const label rowsDisp, // default = 0
-    const label intFacesDisp, // default = 0
-    const label extValDisp // default = 0
+          double * valuesTmp
 ) const
 {
     // Initialize valuesTmp = [(diag), (upper), (lower), (extValues)]
@@ -328,19 +319,15 @@ void Foam::cpuCsrMatrixExecutor::initializeValueExt
     (
         nConsRows,
         nConsIntFaces,
-        nCells,
-        nIntFaces,
         diag,
         upper,
         lower,
-        valuesTmp,
-        rowsDisp,
-        intFacesDisp
+        valuesTmp
     );
 
-    for(label i=0; i<nnzExt; ++i)
+    for(label i=0; i<nConsExtNz; ++i)
     {
-        valuesTmp[nConsRows + 2*nConsIntFaces + extValDisp + i] = extValue[i];
+        valuesTmp[nConsRows + 2*nConsIntFaces + i] = extValue[i];
     }
 }
 

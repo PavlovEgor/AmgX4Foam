@@ -340,42 +340,63 @@ void Foam::csrMatrix::initializeConsolidation
 
 void Foam::csrMatrix::initializeValuesConsolidation
 (
-    const label nLocalRows,
-    const label nLocalIntFaces,
-    const label nLocalExtVals,
     const scalarField& diag,
     const scalarField& upper,
     const scalarField& lower,
     const scalarField& extVal,
-    List<scalarField>& diagLst,
-    List<scalarField>& upperLst,
-    List<scalarField>& lowerLst,
-    List<scalarField>& extValLst
+    scalar*& diagCons,
+    scalar*& upperCons,
+    scalar*& lowerCons,
+    scalar*& extValCons
 )
 {
+    List<List<scalar>> diagLst(gpuWorldSize_);
     diagLst[myGpuWorldRank_] = diag;
     Pstream::gatherList(diagLst, UPstream::msgType(), gpuWorld_);
-    // MPI_Gather((void *) diag, nLocalRows, MPI_REAL,
-    //            (void *) diagLst.cdata(), nLocalRows, MPI_REAL, 0,
-    //            PstreamGlobals::MPICommunicators_[gpuWorld_]);
     
+    List<List<scalar>> upperLst(gpuWorldSize_);
     upperLst[myGpuWorldRank_] = upper;
     Pstream::gatherList(upperLst, UPstream::msgType(), gpuWorld_);
-    // MPI_Gather((void *) upper, nLocalIntFaces, MPI_REAL,
-    //            (void *) upperLst.cdata(), nLocalIntFaces, MPI_REAL, 0,
-    //            PstreamGlobals::MPICommunicators_[gpuWorld_]);
 
+    List<List<scalar>> lowerLst(gpuWorldSize_);
     lowerLst[myGpuWorldRank_] = lower;
     Pstream::gatherList(lowerLst, UPstream::msgType(), gpuWorld_);
-    // MPI_Gather((void *) lower, nLocalIntFaces, MPI_REAL,
-    //            (void *) lowerLst.cdata(), nLocalIntFaces, MPI_REAL, 0,
-    //            PstreamGlobals::MPICommunicators_[gpuWorld_]);
 
+    List<List<scalar>> extValLst(gpuWorldSize_);
     extValLst[myGpuWorldRank_] = extVal;
     Pstream::gatherList(extValLst, UPstream::msgType(), gpuWorld_);
-    // MPI_Gather((void *) extVal, nLocalExtVals, MPI_REAL,
-    //            (void *) extValLst.cdata(), nLocalExtVals, MPI_REAL, 0,
-    //            PstreamGlobals::MPICommunicators_[gpuWorld_]);
+
+    if(gpuProc_)
+    {
+        std::visit([this, &diagCons](const auto& exec)
+                    { diagCons = exec.template alloc<scalar>(this->nConsRows_); },
+                    csrMatExec_);
+        std::visit([this, &diagLst, &diagCons](const auto& exec)
+                    { exec.template concatenate<scalar>(this->nConsRows_, diagLst, diagCons); },
+                    csrMatExec_);
+
+        std::visit([this, &upperCons](const auto& exec)
+                    { upperCons = exec.template alloc<scalar>(this->nConsIntFaces_); },
+                    csrMatExec_);
+        std::visit([this, &upperLst, &upperCons](const auto& exec)
+                    { exec.template concatenate<scalar>(this->nConsIntFaces_, upperLst, upperCons); },
+                    csrMatExec_);
+
+        std::visit([this, &lowerCons](const auto& exec)
+                    { lowerCons = exec.template alloc<scalar>(this->nConsIntFaces_); },
+                    csrMatExec_);
+        std::visit([this, &lowerLst, &lowerCons](const auto& exec)
+                    { exec.template concatenate<scalar>(this->nConsIntFaces_, lowerLst, lowerCons); },
+                    csrMatExec_);
+
+        std::visit([this, &extValCons](const auto& exec)
+                    { extValCons = exec.template alloc<scalar>(this->nConsExtNz_); },
+                    csrMatExec_);
+        std::visit([this, &extValLst, &extValCons](const auto& exec)
+                    { exec.template concatenate<scalar>(this->nConsExtNz_, extValLst, extValCons); },
+                    csrMatExec_);
+    }
+    
 
     Pstream::barrier(gpuWorld_);
 }
@@ -837,8 +858,6 @@ void Foam::csrMatrix::applyPermutation(const lduMatrix& lduMatrix)
     (
         nCells,
         nIntFaces,
-        nCells,
-        nIntFaces,
         diag,
         upper,
         lower,
@@ -916,43 +935,37 @@ void Foam::csrMatrix:: applyPermutation
     label nCells = lduMatrix.diag().size();
     label totNnz;
 
-    const scalar * diag = nullptr;
-    const scalar * upper = nullptr;
-    const scalar * lower = nullptr;
-    const scalar * extVals = nullptr;
-
-    std::visit([&foamDiag, &diag, nCells](const auto& exec)
-               { diag = exec.template copyFromFoam<scalar>(nCells, foamDiag.cdata()); },
-               csrMatExec_);
-    std::visit([&foamUpper, &upper, nIntFaces](const auto& exec)
-               { upper = exec.template copyFromFoam<scalar>(nIntFaces, foamUpper.cdata()); },
-               csrMatExec_);
-    std::visit([&foamLower, &lower, nIntFaces](const auto& exec)
-               { lower = exec.template copyFromFoam<scalar>(nIntFaces, foamLower.cdata()); },
-               csrMatExec_);
-    std::visit([&foamExtVals, &extVals, nnzExt](const auto& exec)
-               { extVals = exec.template copyFromFoam<scalar>(nnzExt, foamExtVals.cdata()); },
-               csrMatExec_);
-
     //- Compute global number of equations
     nGlobalCells = returnReduce(nCells, sumOp<label>());
 
-    List<scalarField> diagLst(gpuWorldSize_);
-    List<scalarField> lowerLst(gpuWorldSize_);
-    List<scalarField> upperLst(gpuWorldSize_);
-    List<scalarField> extValLst(gpuWorldSize_);
+    scalar * diag = nullptr;
+    scalar * upper = nullptr;
+    scalar * lower = nullptr;
+    scalar * extVals = nullptr;
 
     if(consolidationStatus_ == ConsolidationStatus::initialized)
     {
-        initializeValuesConsolidation(nCells, nIntFaces, nnzExt,
-                                      foamDiag, foamUpper, foamLower, foamExtVals,
-                                      diagLst, upperLst, lowerLst, extValLst);
+        initializeValuesConsolidation(foamDiag, foamUpper, foamLower, foamExtVals,
+                                      diag, upper, lower, extVals);
 
         totNnz = nConsRows_ + 2*nConsIntFaces_ + nConsExtNz_;
     }
     else
     {
         totNnz = nCells + 2*nIntFaces + nnzExt;
+
+        std::visit([&foamDiag, &diag, nCells](const auto& exec)
+                { diag = exec.template copyFromFoam<scalar>(nCells, foamDiag.cdata()); },
+                csrMatExec_);
+        std::visit([&foamUpper, &upper, nIntFaces](const auto& exec)
+                { upper = exec.template copyFromFoam<scalar>(nIntFaces, foamUpper.cdata()); },
+                csrMatExec_);
+        std::visit([&foamLower, &lower, nIntFaces](const auto& exec)
+                { lower = exec.template copyFromFoam<scalar>(nIntFaces, foamLower.cdata()); },
+                csrMatExec_);
+        std::visit([&foamExtVals, &extVals, nnzExt](const auto& exec)
+                { extVals = exec.template copyFromFoam<scalar>(nnzExt, foamExtVals.cdata()); },
+                csrMatExec_);
     }
 
     if(gpuProc_)
@@ -972,44 +985,17 @@ void Foam::csrMatrix:: applyPermutation
                    { valuesTmp = exec.template alloc<scalar>(totNnz); },
                     csrMatExec_);
 
-        if(consolidationStatus_ == ConsolidationStatus::initialized)
-        {
-            for(label i=0; i<gpuWorldSize_; ++i)
-            {
-                initializeValueExt
-                (
-                    nConsRows_,
-                    nConsIntFaces_,
-                    rowsConsDispPtr_->cdata()[i+1] - rowsConsDispPtr_->cdata()[i],
-                    intFacesConsDispPtr_->cdata()[i+1] - intFacesConsDispPtr_->cdata()[i],
-                    extNzConsDispPtr_->cdata()[i+1] - extNzConsDispPtr_->cdata()[i],
-                    diagLst[i].cdata(),
-                    upperLst[i].cdata(),
-                    lowerLst[i].cdata(),
-                    extValLst[i].cdata(),
-                    valuesTmp,
-                    rowsConsDispPtr_->cdata()[i],
-                    intFacesConsDispPtr_->cdata()[i],
-                    extNzConsDispPtr_->cdata()[i]
-                );
-            }
-        }
-        else
-        {
-            initializeValueExt
-            (
-                nCells,
-                nIntFaces,
-                nCells,
-                nIntFaces,
-                nnzExt,
-                diag,
-                upper,
-                lower,
-                extVals,
-                valuesTmp
-            );
-        }
+        initializeValueExt
+        (
+            nConsRows_,
+            nConsIntFaces_,
+            nConsExtNz_,
+            diag,
+            upper,
+            lower,
+            extVals,
+            valuesTmp
+        );
         
         // Apply permutation
         applyValuePermutation
@@ -1019,6 +1005,17 @@ void Foam::csrMatrix:: applyPermutation
             valuesTmp,
             valuesPtr_
         );
+
+        std::visit([diag](const auto& exec)
+                    {exec.template clear<scalar>(diag); }, csrMatExec_);
+        std::visit([upper](const auto& exec)
+                    {exec.template clear<scalar>(upper); }, csrMatExec_);
+        std::visit([lower](const auto& exec)
+                    {exec.template clear<scalar>(lower); }, csrMatExec_);
+        std::visit([extVals](const auto& exec)
+                    {exec.template clear<scalar>(extVals); }, csrMatExec_);
+        std::visit([valuesTmp](const auto& exec)
+                    {exec.template clear<scalar>(valuesTmp); }, csrMatExec_);
     }
 }
 

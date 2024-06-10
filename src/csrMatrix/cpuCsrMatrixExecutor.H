@@ -157,31 +157,22 @@ public:
     (
         const label   nConsRows,
         const label   nConsIntFaces,
-        const label   nRows,
-        const label   nIntFaces,
         const double * const diag,
         const double * const upper,
         const double * const lower,
-              double * valuesTmp,
-        const label   rowsDisp = 0,
-        const label   intFacesDisp = 0                   
+              double * valuesTmp                  
     ) const;
 
     void initializeValueExt
     (
         const label nConsRows,
         const label nConsIntFaces,
-        const label nCells,
-        const label nIntFaces,
-        const label nnzExt,
+        const label nConsExtNz,
         const double * const diag,
         const double * const upper,
         const double * const lower,
         const double * const extValue,
-              double * valuesTmp,
-        const label rowsDisp = 0,
-        const label intFacesDisp = 0,
-        const label extValDisp = 0
+              double * valuesTmp
     ) const;
 
     void applyValuePermutation

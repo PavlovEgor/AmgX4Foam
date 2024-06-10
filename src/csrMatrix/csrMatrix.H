@@ -240,48 +240,36 @@ protected:
 
         void initializeValuesConsolidation
         (
-            const label nLocalRows,
-            const label nLocalIntFaces,
-            const label nLocalExtVals,
             const scalarField& diag,
             const scalarField& upper,
             const scalarField& lower,
             const scalarField& extVal,
-            List<scalarField>& diagLst,
-            List<scalarField>& upperLst,
-            List<scalarField>& lowerLst,
-            List<scalarField>& extValLst
+            scalar*& diagCons,
+            scalar*& upperCons,
+            scalar*& lowerCons,
+            scalar*& extValCons
         );
            
         void initializeValue
         (
             const label   nConsRows,
             const label   nConsIntFaces,
-            const label   nRows,
-            const label   nIntFaces,
             const double * const diag,
             const double * const upper,
             const double * const lower,
-                  double * valuesTmp,
-            const label   rowsDisp = 0,
-            const label   intFacesDisp = 0              
+                  double * valuesTmp            
         );
 
         void initializeValueExt
         (
             const label nConsRows,
             const label nConsIntFaces,
-            const label nCells,
-            const label nIntFaces,
-            const label nnzExt,
+            const label nConsExtNz,
             const double * const diag,
             const double * const upper,
             const double * const lower,
             const double * const extValue,
-                  double * valuesTmp,
-            const label rowsDisp = 0,
-            const label intFacesDisp = 0,
-            const label extValDisp = 0
+                  double * valuesTmp
         );
 
         void applyValuePermutation
