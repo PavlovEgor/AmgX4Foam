@@ -464,6 +464,8 @@ void Foam::csrMatrix::computePermutation(const lduAddressing * addr)
     //             colIndicesTmp = [0, ... nCells-1, (neighbour), (owner)]
     initializeSequence(totNnz, tmpPerm);
     initializeSequence(nCells, rowIndicesTmp);
+    initializeSequence(nCells, colIndicesTmp);
+
     initializeAddressing
     (
         nCells,
@@ -717,7 +719,11 @@ void Foam::csrMatrix::computePermutation
                     rowIndicesTmp
                 );
             }
-        }     
+        }
+        else
+        {
+            initializeSequence(nConsRows_, colIndicesTmp);
+        }
 
         //- Compute sorting to obtain permutation
         computeSorting

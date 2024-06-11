@@ -406,16 +406,6 @@ void Foam::AmgXWrapper::setOperator
             matValues = matrix->values();
         }
 
-        if(matrix->isConsolidated())
-        {
-            label nConsRows = matrix->nConsRows();
-            checkCudaError(cudaMalloc((void**) &pCons_, sizeof(scalar)*nConsRows), "pCons_ cudaMalloc");
-            checkCudaError(cudaMalloc((void**) &rhsCons_, sizeof(scalar)*nConsRows), "rhsCons_ cudamalloc");
-
-            cudaIpcGetMemHandle(&pConsHandle_, pCons_);
-            cudaIpcGetMemHandle(&rhsConsHandle_, rhsCons_);
-        }
-
         //- upload matrix A to AmgX
         if (globalGpuWorldSize_ == 1 || !Pstream::parRun())
         {
@@ -465,6 +455,13 @@ void Foam::AmgXWrapper::setOperator
 
     if(matrix->isConsolidated())
     {
+        label nConsRows = matrix->nConsRows();
+        checkCudaError(cudaMalloc((void**) &pCons_, sizeof(scalar)*nConsRows), "pCons_ cudaMalloc");
+        checkCudaError(cudaMalloc((void**) &rhsCons_, sizeof(scalar)*nConsRows), "rhsCons_ cudamalloc");
+
+        cudaIpcGetMemHandle(&pConsHandle_, pCons_);
+        cudaIpcGetMemHandle(&rhsConsHandle_, rhsCons_);
+
         MPI_Bcast(&pConsHandle_, sizeof(cudaIpcMemHandle_t), MPI_BYTE, 0, gpuWorld_);
         MPI_Bcast(&rhsConsHandle_, sizeof(cudaIpcMemHandle_t), MPI_BYTE, 0, gpuWorld_);
         

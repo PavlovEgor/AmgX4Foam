@@ -44,6 +44,7 @@ SourceFiles
 #define cuda_CsrMatrix_Executor_H
 
 #include "scalar.H"
+#include "List.H"
 
 namespace Foam
 {
@@ -66,7 +67,7 @@ public:
     Type* allocZero(Foam::label size) const;
 
     template<class Type>
-    const Type* copyFromFoam(Foam::label size, const Type* hostPtr) const;
+    Type* copyFromFoam(Foam::label size, const Type* hostPtr) const;
 
     template<class Type>
     void clear(Type* ptr) const;
@@ -74,14 +75,26 @@ public:
     template<class Type>
     void clear(const Type* ptr) const;
 
+    template<class Type>
+    void concatenate
+    (
+        label globSize,
+        List<List<Type>> lst,
+        Type * ptr
+    ) const;
+
+    void initializeSequence
+    (
+    const label len,
+          label * vect
+    ) const;
+
     void initializeAddressing
     (
         const label   nCells,
         const label   nInternalFaces,
-        const label   totNnz,
         const label * const owner,
         const label * const neighbour,
-              label * tmpPerm,
               label * rowIndTmp,
               label * colIndTmp
     ) const;
@@ -91,12 +104,10 @@ public:
         const label   nCells,
         const label   nInternalFaces,
         const label   nnzExt,
-        const label   totNnz,
         const label * const owner,
         const label * const neighbour,
         const label * const extRows,
         const label * const extCols,
-              label * tmpPerm,
               label * rowIndTmp,
               label * colIndTmp
     ) const;
@@ -112,12 +123,28 @@ public:
 
     void localToGlobalColIndices
     (
+        const label   nConsRows,
+        const label   nConsIntFaces,
         const label   nRows,
         const label   nIntFaces,
         const label   diagIndexGlobal,
         const label   lowOffGlobal,
         const label   uppOffGlobal,
-              label * colIndicesGlobal
+              label * colIndicesGlobal,
+        const label   rowsDispl = 0,
+        const label   intFacesDispl = 0
+    ) const;
+
+    void localToConsRowIndex
+    (
+        const label nConsRows,
+        const label nConsIntFaces,
+        const label nIntFaces,
+        const label nExtNz,
+        const label intFacesDipl,
+        const label extDispl,
+        const label offset,
+            label * rowIndices
     ) const;
 
     void applyAddressingPermutation

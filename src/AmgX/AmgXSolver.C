@@ -35,8 +35,8 @@ License
 
 #include "globalIndex.H"
 
-#include <iostream>
-#include <fstream>
+// #include <iostream>
+// #include <fstream>
 
 // * * * * * * * * * * * * * * Static Data Members * * * * * * * * * * * * * //
 
@@ -128,7 +128,7 @@ Foam::solverPerformance Foam::AmgXSolver::solve
     label nnz = Amat.nLocalNz();
 
     //- Print matrix converted to check
-    label * hostOwnStrt = new label[Amat.nOwnerStart()];
+    /*label * hostOwnStrt = new label[Amat.nOwnerStart()];
     cudaMemcpy(hostOwnStrt, Amat.ownerStart(), Amat.nOwnerStart()*sizeof(label), cudaMemcpyDeviceToHost);
     string fileName = "ownStart-escape" + std::to_string(Pstream::myProcNo());
     std::ofstream outFile1(fileName); //, std::ios_base::app);
@@ -150,7 +150,7 @@ Foam::solverPerformance Foam::AmgXSolver::solve
     std::ofstream outFile3(fileName);
     outFile3 << "values:" << nl;
     for(int i=0; i< nnz; ++i) outFile3 << hostValues[i] << nl;
-    outFile3.close();
+    outFile3.close();*/
 
     if(!ctx.initialized())
     {

@@ -66,7 +66,9 @@ Type* Foam::cpuCsrMatrixExecutor::copyFromFoam
 	const Type* hostPtr
 ) const
 {
-    Type* ptr = (Type*) hostPtr;
+    // Type* ptr = (Type*) hostPtr;
+    Type * ptr = new Type[size];
+    for(label i=0; i<size; ++i) ptr[i] = hostPtr[i];
 	return ptr;
 }
 
@@ -173,8 +175,8 @@ void Foam::cpuCsrMatrixExecutor::initializeAddressingExt
 void Foam::cpuCsrMatrixExecutor::computeSorting
 (
     const label   totNnz,
-    const label * const tmpPerm,
-    const label * const rowIndTmp,
+          label * tmpPerm,
+          label * rowIndTmp,
           label * rowInd,
           label * ldu2csr
 ) const
@@ -195,6 +197,7 @@ void Foam::cpuCsrMatrixExecutor::computeSorting
         rowInd[i] = pairVect[i].first;
         ldu2csr[pairVect[i].second] = i;
     }
+    delete pairTmp;
 }
 
 

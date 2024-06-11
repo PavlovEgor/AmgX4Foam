@@ -110,8 +110,8 @@ public:
     void computeSorting
     (
         const label   totNnz,
-        const label * const tmpPerm,
-        const label * const rowIndTmp,
+              label * tmpPerm,
+              label * rowIndTmp,
               label * rowInd,
               label * ldu2csr
     ) const;

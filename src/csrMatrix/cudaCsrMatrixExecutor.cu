@@ -108,6 +108,7 @@ void cudaLocToGlobD
 (
     const int   nRows,
     const int   diagIndexGlobal,
+    const int   rowsDispl,
           int * colIndicesGlobal
 )
 {
@@ -115,7 +116,7 @@ void cudaLocToGlobD
 
     if(iNnz < nRows)
     {
-        colIndicesGlobal[iNnz] += diagIndexGlobal;
+        colIndicesGlobal[rowsDispl + iNnz] += diagIndexGlobal;
     }
 }
 
@@ -123,10 +124,12 @@ void cudaLocToGlobD
 __global__
 void cudaLocToGlobON
 (
-    const int   nRows,
+    const int   nConsRows,
+    const int   nConsIntFaces,
     const int   nIntFaces,
     const int   lowOffGlobal,
     const int   uppOffGlobal,
+    const int   intFacesDispl,
           int * colIndicesGlobal
 )
 {
@@ -134,8 +137,47 @@ void cudaLocToGlobON
 
     if(iNnz < nIntFaces)
     {
-        colIndicesGlobal[nRows + iNnz] += uppOffGlobal;
-        colIndicesGlobal[nRows + nIntFaces + iNnz] += lowOffGlobal;
+        colIndicesGlobal[nConsRows + intFacesDispl + iNnz] += uppOffGlobal;
+        colIndicesGlobal[nConsRows + nConsIntFaces + intFacesDispl + iNnz] += lowOffGlobal;
+    }
+}
+
+__global__
+void cudaLocToConsON
+(
+    const int nConsRows,
+    const int nConsIntFaces,
+    const int nIntFaces,
+    const int intFacesDispl,
+    const int offset,
+          int * rowIndices
+)
+{
+    int iNnz = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if(iNnz < nIntFaces)
+    {
+        rowIndices[nConsRows + intFacesDispl + iNnz] += offset;
+        rowIndices[nConsRows + nConsIntFaces + intFacesDispl + iNnz] += offset;
+    }
+}
+
+__global__
+void cudaLocToConsExt
+(
+    const int nConsRows,
+    const int nConsIntFaces,
+    const int nExtNz,
+    const int extDispl,
+    const int offset,
+          int * rowIndices
+)
+{
+    int iNnz = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if(iNnz < nExtNz)
+    {
+        rowIndices[nConsRows + 2 * nConsIntFaces + extDispl + iNnz] += offset;
     }
 }
 
@@ -354,8 +396,10 @@ void Foam::cudaCsrMatrixExecutor::concatenate
 
     for(label i=0; i<lst.size(); ++i)
     {
-        size = lst.size();
-        label err = CHECK_CUDA_ERROR(cudaMemcpy(&ptr[newStart], lst.cdata(), (size_t) size*sizeof(Type), cudaMemcpyHostToDevice));
+        size = lst[i].size();
+        label err = CHECK_CUDA_ERROR(
+                        cudaMemcpy(&ptr[newStart], lst[i].cdata(), (size_t) size*sizeof(Type), cudaMemcpyHostToDevice)
+                    );
         if (err != 0)
         {
             FatalErrorInFunction << "ERROR: cudaMemcpy returned " << err << abort(FatalError);
@@ -457,8 +501,8 @@ void Foam::cudaCsrMatrixExecutor::initializeAddressingExt
 void Foam::cudaCsrMatrixExecutor::computeSorting
 (
     const label   totNnz,
-    const label * const tmpPerm,
-    const label * const rowIndTmp,
+          label * tmpPerm,
+          label * rowIndTmp,
           label * rowInd,
           label * ldu2csr
 ) const
@@ -522,16 +566,19 @@ void Foam::cudaCsrMatrixExecutor::localToGlobalColIndices
     (
         nRows,
         diagIndexGlobal,
+        rowsDispl,
         colIndicesGlobal
     );
 
     numBlocks = (nIntFaces + NUM_THREADS_PER_BLOCK - 1) / NUM_THREADS_PER_BLOCK;
     cudaLocToGlobON<<<numBlocks, NUM_THREADS_PER_BLOCK>>>
     (
-        nRows,
+        nConsRows,
+        nConsIntFaces,
         nIntFaces,
         lowOffGlobal,
         uppOffGlobal,
+        intFacesDispl,
         colIndicesGlobal
     );
 
@@ -547,12 +594,41 @@ void Foam::cudaCsrMatrixExecutor::localToConsRowIndex
     const label nConsIntFaces,
     const label nIntFaces,
     const label nExtNz,
-    const label intFacesDipl,
+    const label intFacesDispl,
     const label extDispl,
     const label offset,
           label * rowIndices
 ) const
-{}
+{
+    label numBlocks;
+
+    numBlocks = (nIntFaces + NUM_THREADS_PER_BLOCK - 1) / NUM_THREADS_PER_BLOCK;
+    cudaLocToConsON<<<numBlocks, NUM_THREADS_PER_BLOCK>>>
+    (
+        nConsRows,
+        nConsIntFaces,
+        nIntFaces,
+        intFacesDispl,
+        offset,
+        rowIndices
+    );
+
+    numBlocks = (nExtNz + NUM_THREADS_PER_BLOCK - 1) / NUM_THREADS_PER_BLOCK;
+    cudaLocToConsExt<<<numBlocks, NUM_THREADS_PER_BLOCK>>>
+    (
+        nConsRows,
+        nConsIntFaces,
+        nExtNz,
+        extDispl,
+        offset,
+        rowIndices
+    );
+
+    cudaDeviceSynchronize();
+    CHECK_LAST_CUDA_ERROR();
+
+    return;
+}
 
 void Foam::cudaCsrMatrixExecutor::applyAddressingPermutation
 (
