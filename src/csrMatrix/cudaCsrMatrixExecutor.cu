@@ -56,22 +56,6 @@ void cudaInitializeSequence
     }
 }
 
-__global__
-void cudaInitializeSequencePair
-(
-    const int   nnz,
-          int * rowInd,
-          int * colInd
-)
-{
-    int iNnz = blockIdx.x * blockDim.x + threadIdx.x;
-
-    if(iNnz < nnz)
-    {
-        rowInd[iNnz] = iNnz;
-        colInd[iNnz] = iNnz;
-    }
-}
 
 __global__
 void cudaInitializeAddr
@@ -273,12 +257,9 @@ void cudaApplyValuePermutation
 
     if(i < length)
     {
-        dstArray[permArray[i/blockLen]] = srcArray[i + i % blockLen];
+        dstArray[permArray[i]] = srcArray[i];
     }
 } 
-//NOTA: this function (when csrAdressing will be joined back to csrMatrix) will 
-//      become e template on the array type to be used both for adressing and 
-//      values permutaiton
 
 
 // * * * * * * * * * * * * * *  Wrapper functions * * * * * * * * * * * * * * //
@@ -320,7 +301,7 @@ Type* Foam::cudaCsrMatrixExecutor::allocZero
 
 
 template<class Type>
-const Type* Foam::cudaCsrMatrixExecutor::copyFromFoam
+Type* Foam::cudaCsrMatrixExecutor::copyFromFoam
 (
     Foam::label size,
 	const Type* hostPtr
@@ -339,7 +320,7 @@ const Type* Foam::cudaCsrMatrixExecutor::copyFromFoam
         FatalErrorInFunction << "ERROR: cudaMemcpy returned " << err << abort(FatalError);
     }
 
-    return static_cast<const Type*>(ptr);
+    return static_cast<Type*>(ptr);
 }
 
 template<class Type>
@@ -360,38 +341,62 @@ void Foam::cudaCsrMatrixExecutor::clear(const Type* ptr) const
     }
 }
 
+template<class Type>
+void Foam::cudaCsrMatrixExecutor::concatenate
+(
+    label globSize,
+    List<List<Type>> lst,
+    Type * ptr
+) const
+{
+    label newStart = 0;
+    label size;
+
+    for(label i=0; i<lst.size(); ++i)
+    {
+        size = lst.size();
+        label err = CHECK_CUDA_ERROR(cudaMemcpy(&ptr[newStart], lst.cdata(), (size_t) size*sizeof(Type), cudaMemcpyHostToDevice));
+        if (err != 0)
+        {
+            FatalErrorInFunction << "ERROR: cudaMemcpy returned " << err << abort(FatalError);
+        }
+        newStart += size;
+        if(newStart > globSize)
+        {
+            FatalErrorInFunction << "Concatenate size mismatch" << nl;
+        }
+    }
+}
+
+void Foam::cudaCsrMatrixExecutor::initializeSequence
+(
+    const label len,
+          label * vect
+) const
+{
+    // Initialize vect = [0, 1, ... len-1]
+    label numBlocks = (len + NUM_THREADS_PER_BLOCK - 1) / NUM_THREADS_PER_BLOCK;
+    cudaInitializeSequence<<<numBlocks, NUM_THREADS_PER_BLOCK>>>
+    (
+        len,
+        vect
+    );
+}
+
 
 void Foam::cudaCsrMatrixExecutor::initializeAddressing
 (
     const Foam::label   nCells,
     const Foam::label   nInternalFaces,
-    const Foam::label   totNnz,
     const Foam::label * const owner,
     const Foam::label * const neighbour,
-          Foam::label * tmpPerm,
           Foam::label * rowIndTmp,
           Foam::label * colIndTmp
 ) const
 {
-    // Initialize tmpPerm = [0, 1, ... totNnz-1]
-    label numBlocks = (totNnz + NUM_THREADS_PER_BLOCK - 1) / NUM_THREADS_PER_BLOCK;
-    cudaInitializeSequence<<<numBlocks, NUM_THREADS_PER_BLOCK>>>
-    (
-        totNnz,
-        tmpPerm
-    );
-
     // Initialize: rowindicesTmp = [0, ... nCells-1, (owner), (neighbour)]
     //             colindicesTmp = [0, ... nCells-1, (neighbour), (owner)]
-    numBlocks = (nCells + NUM_THREADS_PER_BLOCK - 1) / NUM_THREADS_PER_BLOCK + 1;
-    cudaInitializeSequencePair<<<numBlocks, NUM_THREADS_PER_BLOCK>>>
-    (
-        nCells,
-        rowIndTmp,
-        colIndTmp
-    );
-
-    numBlocks = (nInternalFaces + NUM_THREADS_PER_BLOCK - 1) / NUM_THREADS_PER_BLOCK;
+    label numBlocks = (nInternalFaces + NUM_THREADS_PER_BLOCK - 1) / NUM_THREADS_PER_BLOCK;
     cudaInitializeAddr<<<numBlocks, NUM_THREADS_PER_BLOCK>>>
     (
         nCells,
@@ -413,12 +418,10 @@ void Foam::cudaCsrMatrixExecutor::initializeAddressingExt
     const label   nCells,
     const label   nInternalFaces,
     const label   nnzExt,
-    const label   totNnz,
     const label * const owner,
     const label * const neighbour,
     const label * const extRows,
     const label * const extCols,
-          label * tmpPerm,
           label * rowIndTmp,
           label * colIndTmp
 ) const
@@ -427,10 +430,8 @@ void Foam::cudaCsrMatrixExecutor::initializeAddressingExt
     (
         nCells,
         nInternalFaces,
-        totNnz,
         owner,
         neighbour,
-        tmpPerm,
         rowIndTmp,
         colIndTmp
     );
@@ -456,14 +457,22 @@ void Foam::cudaCsrMatrixExecutor::initializeAddressingExt
 void Foam::cudaCsrMatrixExecutor::computeSorting
 (
     const label   totNnz,
-          label * tmpPerm,
-          label * rowIndTmp,
+    const label * const tmpPerm,
+    const label * const rowIndTmp,
           label * rowInd,
           label * ldu2csr
 ) const
-{   
+{
+	label* permTmp;
+
+    int err = CHECK_CUDA_ERROR(cudaMalloc((void**)&permTmp, totNnz*sizeof(label)));
+    if (err != 0)
+    {
+        FatalErrorInFunction << "ERROR: cudaMalloc returned " << err << abort(FatalError);
+    }
+
     cub::DoubleBuffer<label> d_keys(rowIndTmp, rowInd);
-    cub::DoubleBuffer<label> d_values(tmpPerm, ldu2csr);
+    cub::DoubleBuffer<label> d_values(tmpPerm, permTmp);
 
     // Determine temporary device storage requirements for sort pairs
     void * tempStorage = NULL;
@@ -475,17 +484,16 @@ void Foam::cudaCsrMatrixExecutor::computeSorting
     cub::DeviceRadixSort::SortPairs(tempStorage, tempStorageBytes, d_keys, d_values, totNnz);
 
     rowInd = d_keys.Current();
-    tmpPerm = d_values.Current();
+    permTmp = d_values.Current();
 
     label numBlocks = (totNnz + NUM_THREADS_PER_BLOCK - 1) / NUM_THREADS_PER_BLOCK;
     cudaSetLdu2Csr<<<numBlocks, NUM_THREADS_PER_BLOCK>>>
     (
         totNnz,
-        tmpPerm,
+        permTmp,
         ldu2csr
     );
     cudaDeviceSynchronize();
-
 
     cudaFree(tempStorage);
 
@@ -495,12 +503,16 @@ void Foam::cudaCsrMatrixExecutor::computeSorting
 
 void Foam::cudaCsrMatrixExecutor::localToGlobalColIndices
 (
+    const label nConsRows,
+    const label nConsIntFaces,
     const label nRows,
     const label nIntFaces,
     const label diagIndexGlobal,
     const label lowOffGlobal,
     const label uppOffGlobal,
-    label *colIndicesGlobal
+    label * colIndicesGlobal,
+    const label rowsDispl, // default = 0
+    const label intFacesDispl // default = 0
 ) const
 {
     label numBlocks;
@@ -528,6 +540,19 @@ void Foam::cudaCsrMatrixExecutor::localToGlobalColIndices
 
     return;
 }
+
+void Foam::cudaCsrMatrixExecutor::localToConsRowIndex
+(
+    const label nConsRows,
+    const label nConsIntFaces,
+    const label nIntFaces,
+    const label nExtNz,
+    const label intFacesDipl,
+    const label extDispl,
+    const label offset,
+          label * rowIndices
+) const
+{}
 
 void Foam::cudaCsrMatrixExecutor::applyAddressingPermutation
 (
@@ -693,7 +718,11 @@ void Foam::cudaCsrMatrixExecutor::applyValuePermutation
     (                                                                         \
         Foam::label size                                                      \
     ) const;                                                                  \
-    template const Type* Foam::cudaCsrMatrixExecutor::copyFromFoam<Type>  \
+    template Type* Foam::cudaCsrMatrixExecutor::allocZero<Type>               \
+    (                                                                         \
+        Foam::label size                                                      \
+    ) const;                                                                  \
+    template Type* Foam::cudaCsrMatrixExecutor::copyFromFoam<Type>  \
     (                                                                         \
         Foam::label size,                                                     \
         const Type* hostPtr                                                   \
@@ -705,7 +734,13 @@ void Foam::cudaCsrMatrixExecutor::applyValuePermutation
     template void  Foam::cudaCsrMatrixExecutor::clear<Type>               \
     (                                                                         \
         const Type* ptr                                                       \
-    ) const;
+    ) const;                                                               \
+    template void  Foam::cudaCsrMatrixExecutor::concatenate<Type>               \
+    (                                                                         \
+        label globSize,                                                       \
+        List<List<Type>> lst,                                                 \
+        Type * ptr                                                            \
+    ) const;                                                                  \
 
 makecudaCsrMatrixExecutor(Foam::label)
 makecudaCsrMatrixExecutor(Foam::scalar)
