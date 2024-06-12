@@ -242,8 +242,8 @@ public:
             if (loaded_ > 0)
             {
                 Info<< "Finalizing AmgX-" << eqName_ << nl;
-                // amgx_.finalize();
-                // Amat.finalise();
+                amgx_.finalize();
+                Amat_.finalize();
                 loaded_ = 0;
             }
             else if (!loaded_)

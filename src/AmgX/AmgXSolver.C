@@ -150,7 +150,7 @@ Foam::solverPerformance Foam::AmgXSolver::solve
 
         amgx.setOperator(nGlobalCells, &Amat);
 
-        // Amat.clearAddressing();
+        Amat.clearAddressing();
 
         ctx.initialized() = true;
     }

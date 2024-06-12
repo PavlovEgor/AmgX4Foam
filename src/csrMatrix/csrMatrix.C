@@ -104,18 +104,9 @@ void Foam::csrMatrix::finalize()
     // NOTA: Implementare controllo con buleano o invalidazione del puntatore
     //       per gestire bene la finalizzazione
     
-    if (ownerStartPtr_)
+    if (hasPermutation_)
     {
-        // delete ownerStartPtr_;
-        std::visit([this](const auto& exec)
-               {exec.template clear<label>(this->ownerStartPtr_); }, csrMatExec_);
-    }
-
-    if (colIndicesPtr_)
-    {
-        // delete colIndicesPtr_;
-        std::visit([this](const auto& exec)
-               {exec.template clear<label>(this->colIndicesPtr_); }, csrMatExec_);
+        clearAddressing();
     }
 
     if (ldu2csrPerm_)
