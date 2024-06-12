@@ -85,12 +85,6 @@ Foam::solverPerformance Foam::AmgXSolver::solve
     const direction cmpt
 ) const
 {   
-    solverPerformance solverPerf
-    (
-        typeName,
-        this->fieldName_
-    );
-
     const fvMesh& fvm = dynamicCast<const fvMesh>(this->matrix_.mesh().thisDb());
     
     label nCells = psi.size();
@@ -98,15 +92,13 @@ Foam::solverPerformance Foam::AmgXSolver::solve
     const linearSolverContextTable<AmgXLinearSolverContext<csrMatrix>>& contexts =
         linearSolverContextTable<AmgXLinearSolverContext<csrMatrix>>::New(fvm);
 
-    AmgXLinearSolverContext<csrMatrix>& ctx = contexts.getContext(eqName_);
+    AmgXLinearSolverContext<csrMatrix>& ctx = contexts.getContext(eqName_, typeName);
 
     if (!ctx.loaded())
     {
         FatalErrorInFunction
             << "Could not initialize AMGx" << nl << abort(FatalError);
     }
-
-    ctx.performance = solverPerf;
 
     AmgXWrapper& amgx = ctx.amgx_;
     
@@ -125,7 +117,7 @@ Foam::solverPerformance Foam::AmgXSolver::solve
         Amat.applyPermutation(matrix_, interfaceBouCoeffs_, nGlobalCells);
     }
 
-    label nnz = Amat.nLocalNz();
+    // label nnz = Amat.nLocalNz();
 
     //- Print matrix converted to check
     /*label * hostOwnStrt = new label[Amat.nOwnerStart()];
@@ -171,17 +163,17 @@ Foam::solverPerformance Foam::AmgXSolver::solve
 
     scalarField iNorm(1, 0.0);
     amgx.getResidual(0, iNorm);
-    ctx.performance.initialResidual() = iNorm[0];
+    ctx.performance_.initialResidual() = iNorm[0];
 
     label nIters = 0;
     amgx.getIters(nIters);
-    ctx.performance.nIterations() = nIters;
+    ctx.performance_.nIterations() = nIters;
 
     scalarField fNorm(1, 0.0);
     amgx.getResidual(nIters, fNorm);
-    ctx.performance.finalResidual() = fNorm[0];
+    ctx.performance_.finalResidual() = fNorm[0];
 
-    return ctx.performance;
+    return ctx.performance_;
 }
 
 // * * * * * * * * * * * * * Explicit instantiations  * * * * * * * * * * * //

@@ -110,7 +110,7 @@ public:
 
 
         //- Get existing or a new context by name and matrix
-        T& getContext(const word& name) const
+        T& getContext(const word& name, const word& solverName) const
         {
             auto iter = contexts().find(name);
 
@@ -121,11 +121,11 @@ public:
                 fileName optionsFile = this->mesh().thisDb().time().system()/T::packageName + name + "Options";
                 if(isFile(optionsFile))
                 {
-                    contexts().set(name, new T{name, optionsFile, this->mesh_.solverDict(name)});
+                    contexts().set(name, new T{name, solverName, optionsFile, this->mesh_.solverDict(name)});
                 }
                 else
                 {
-                    contexts().set(name, new T{name, this->mesh_.solverDict(name)});
+                    contexts().set(name, new T{name, solverName, this->mesh_.solverDict(name)});
                 }
 
                 iter = contexts().find(name);

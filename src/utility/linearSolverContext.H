@@ -59,9 +59,9 @@ public:
 
     // Public Members
 
-        solverPerformance performance;
+        solverPerformance performance_;
 
-        const word eqName;
+        const word eqName_;
 
     // Constructors
 
@@ -69,7 +69,15 @@ public:
         linearSolverContext(const word eqName)
         :
             init_(false),
-            eqName(eqName)
+            eqName_(eqName)
+        {}
+
+        //- SolverPerf inintialization construct
+        linearSolverContext(const word eqName, const word solverName)
+        :
+            init_(false),
+            eqName_(eqName),
+            performance_(solverName, eqName)
         {}
 
 

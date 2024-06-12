@@ -156,9 +156,15 @@ public:
     //- Constructors
 
         //- Constructor with external .json file
-        AmgXLinearSolverContext(const word eqName, const fileName& optionsFile, const dictionary solverDict)
+        AmgXLinearSolverContext
+        (
+            const word eqName,
+            const word solverName,
+            const fileName& optionsFile,
+            const dictionary solverDict
+        )
         :
-            linearSolverContext(eqName),
+            linearSolverContext(eqName, solverName),
             loaded_(false),
 			Amat_(solverDict.get<word>("mode"))
         {
@@ -187,25 +193,25 @@ public:
                 // AMGx initialize no arguments
                 err = 1;
                 loaded_ = 0;
-                Info<< "Error: AmgX-" << eqName << " cannot be initialized without a valid config file" << nl;
+                Info<< "Error: AmgX-" << eqName_ << " cannot be initialized without a valid config file" << nl;
                 Info<< optionsFile << " cannot be found" << nl;
             }
 
             if (!err)
             {
-                Info<< "Initializing AmgX-" << eqName << " context" << nl;
+                Info<< "Initializing AmgX-" << eqName_ << " context" << nl;
                 loaded_ = 1;
             }
             else
             {
-                Info<< "Could not initialize AmgX-" << eqName << nl;
+                Info<< "Could not initialize AmgX-" << eqName_ << nl;
             }
         }
 
         //- Constructor with configuration in fvSoltuion dictionary
-        AmgXLinearSolverContext(const word eqName, const dictionary solverDict)
+        AmgXLinearSolverContext(const word eqName, const word solverName, const dictionary solverDict)
         :
-            linearSolverContext(eqName),
+            linearSolverContext(eqName, solverName),
             loaded_(false),
 			Amat_(solverDict.get<word>("mode"))
         {
@@ -226,7 +232,7 @@ public:
                 Pstream::waitRequests(nReq);
             }
 
-            Info<< "Initializing AmgX-" << eqName << " context" << nl;
+            Info<< "Initializing AmgX-" << eqName_ << " context" << nl;
             loaded_ = 1;
         }
 
@@ -235,14 +241,14 @@ public:
         {
             if (loaded_ > 0)
             {
-                Info<< "Finalizing AmgX-" << eqName << nl;
+                Info<< "Finalizing AmgX-" << eqName_ << nl;
                 // amgx_.finalize();
                 // Amat.finalise();
                 loaded_ = 0;
             }
             else if (!loaded_)
             {
-                Info<< "AmgX-" << eqName << " already finalized" << nl;
+                Info<< "AmgX-" << eqName_ << " already finalized" << nl;
             }
         }
 
