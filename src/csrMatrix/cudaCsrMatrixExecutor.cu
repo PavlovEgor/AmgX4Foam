@@ -343,7 +343,7 @@ Type* Foam::cudaCsrMatrixExecutor::allocZero
 
 
 template<class Type>
-Type* Foam::cudaCsrMatrixExecutor::copyFromFoam
+const Type* Foam::cudaCsrMatrixExecutor::copyFromFoam
 (
     Foam::label size,
 	const Type* hostPtr
@@ -362,7 +362,7 @@ Type* Foam::cudaCsrMatrixExecutor::copyFromFoam
         FatalErrorInFunction << "ERROR: cudaMemcpy returned " << err << abort(FatalError);
     }
 
-    return static_cast<Type*>(ptr);
+    return static_cast<const Type*>(ptr);
 }
 
 template<class Type>
@@ -798,7 +798,7 @@ void Foam::cudaCsrMatrixExecutor::applyValuePermutation
     (                                                                         \
         Foam::label size                                                      \
     ) const;                                                                  \
-    template Type* Foam::cudaCsrMatrixExecutor::copyFromFoam<Type>  \
+    template const Type* Foam::cudaCsrMatrixExecutor::copyFromFoam<Type>  \
     (                                                                         \
         Foam::label size,                                                     \
         const Type* hostPtr                                                   \

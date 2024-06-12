@@ -67,7 +67,7 @@ public:
     Type* allocZero(Foam::label size) const;
 
     template<class Type>
-    Type* copyFromFoam(Foam::label size, const Type* hostPtr) const;
+    const Type* copyFromFoam(Foam::label size, const Type* hostPtr) const;
 
     template<class Type>
     void clear(Type* ptr) const;

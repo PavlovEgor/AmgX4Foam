@@ -60,15 +60,13 @@ Type* Foam::cpuCsrMatrixExecutor::allocZero
 }
 
 template<class Type>
-Type* Foam::cpuCsrMatrixExecutor::copyFromFoam
+const Type* Foam::cpuCsrMatrixExecutor::copyFromFoam
 (
     Foam::label size,
 	const Type* hostPtr
 ) const
 {
-    // Type* ptr = (Type*) hostPtr;
-    Type * ptr = new Type[size];
-    for(label i=0; i<size; ++i) ptr[i] = hostPtr[i];
+    const Type* ptr = (Type*) hostPtr;
 	return ptr;
 }
 
@@ -367,7 +365,7 @@ void Foam::cpuCsrMatrixExecutor::applyValuePermutation
     (                                                                     \
         Foam::label size                                                  \
     ) const;                                                              \
-    template Type* Foam::cpuCsrMatrixExecutor::copyFromFoam<Type>         \
+    template const Type* Foam::cpuCsrMatrixExecutor::copyFromFoam<Type>   \
     (                                                                     \
         Foam::label size,                                                 \
         const Type* hostPtr                                               \

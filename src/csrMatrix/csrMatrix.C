@@ -607,10 +607,14 @@ void Foam::csrMatrix::computePermutation
     }
 
     label totNnz;
-    label* own = nullptr;
-	label* neigh = nullptr;
-    label* extRows = nullptr;
-    label* extCols = nullptr;
+    const label* own = nullptr;
+	const label* neigh = nullptr;
+    const label* extRows = nullptr;
+    const label* extCols = nullptr;
+    label* ownCons = nullptr;
+	label* neighCons = nullptr;
+    label* extRowsCons = nullptr;
+    label* extColsCons = nullptr;
     labelList* consDiagOffGlob = nullptr;
     labelList* consLowOffGlob = nullptr;
     labelList* consUppOffGlob = nullptr;
@@ -624,7 +628,7 @@ void Foam::csrMatrix::computePermutation
         initializeConsolidation(nCells, nIntFaces, nnzExt, diagIndexGlobal, lowOffGlobal, uppOffGlobal,
                                 hostOwn, hostNeigh, foamExtRows, foamExtCols, totNnz,
                                 consDiagOffGlob, consLowOffGlob, consUppOffGlob,
-                                own, neigh, extRows, extCols);
+                                ownCons, neighCons, extRowsCons, extColsCons);
     }
     else
     {
@@ -683,22 +687,22 @@ void Foam::csrMatrix::computePermutation
         //             colIndicesTmp = [(0, ... nRows0-1), ... (0, ... nRowsN-1), (neighbour), (owner), (extcols)]
         initializeSequence(totNnz, tmpPerm);
         initializeSequence(nConsRows_, rowIndicesTmp);
-
-        initializeAddressingExt
-        (
-            nConsRows_,
-            nConsIntFaces_,
-            nConsExtNz_,
-            own,
-            neigh,
-            extRows,
-            extCols,
-            rowIndicesTmp,
-            colIndicesTmp
-        );
         
         if(consolidationStatus_ == ConsolidationStatus::initialized)
         {          
+            initializeAddressingExt
+            (
+                nConsRows_,
+                nConsIntFaces_,
+                nConsExtNz_,
+                ownCons,
+                neighCons,
+                extRowsCons,
+                extColsCons,
+                rowIndicesTmp,
+                colIndicesTmp
+            );
+
             for(label i=0; i<gpuWorldSize_; ++i)
             {
                 initializeSequence
@@ -723,6 +727,19 @@ void Foam::csrMatrix::computePermutation
         else
         {
             initializeSequence(nConsRows_, colIndicesTmp);
+
+            initializeAddressingExt
+            (
+                nConsRows_,
+                nConsIntFaces_,
+                nConsExtNz_,
+                own,
+                neigh,
+                extRows,
+                extCols,
+                rowIndicesTmp,
+                colIndicesTmp
+            );
         }
 
         //- Compute sorting to obtain permutation
@@ -790,14 +807,29 @@ void Foam::csrMatrix::computePermutation
                     {exec.template clear<label>(rowIndicesTmp); }, csrMatExec_);
         std::visit([colIndicesTmp](const auto& exec)
                     {exec.template clear<label>(colIndicesTmp); }, csrMatExec_);
-        std::visit([own](const auto& exec)
-                    {exec.template clear<label>(own); }, csrMatExec_);
-        std::visit([neigh](const auto& exec)
-                    {exec.template clear<label>(neigh); }, csrMatExec_);
-        std::visit([extRows](const auto& exec)
-                    {exec.template clear<label>(extRows); }, csrMatExec_);
-        std::visit([extCols](const auto& exec)
-                    {exec.template clear<label>(extCols); }, csrMatExec_);
+        if(consolidationStatus_ == ConsolidationStatus::initialized)
+        {
+            std::visit([ownCons](const auto& exec)
+                        {exec.template clear<label>(ownCons); }, csrMatExec_);
+            std::visit([neighCons](const auto& exec)
+                        {exec.template clear<label>(neighCons); }, csrMatExec_);
+            std::visit([extRowsCons](const auto& exec)
+                        {exec.template clear<label>(extRowsCons); }, csrMatExec_);
+            std::visit([extColsCons](const auto& exec)
+                        {exec.template clear<label>(extColsCons); }, csrMatExec_);
+        }
+        else
+        {
+            std::visit([own](const auto& exec)
+                        {exec.template clear<label>(own); }, csrMatExec_);
+            std::visit([neigh](const auto& exec)
+                        {exec.template clear<label>(neigh); }, csrMatExec_);
+            std::visit([extRows](const auto& exec)
+                        {exec.template clear<label>(extRows); }, csrMatExec_);
+            std::visit([extCols](const auto& exec)
+                        {exec.template clear<label>(extCols); }, csrMatExec_);
+        }
+        
     }
     
     UPstream::barrier(gpuWorld_);
@@ -875,9 +907,14 @@ void Foam::csrMatrix::applyPermutation(const lduMatrix& lduMatrix)
         valuesPtr_
     );
 
+    std::visit([diag](const auto& exec)
+                {exec.template clear<scalar>(diag); }, csrMatExec_);
+    std::visit([upper](const auto& exec)
+                {exec.template clear<scalar>(upper); }, csrMatExec_);
+    std::visit([lower](const auto& exec)
+                {exec.template clear<scalar>(lower); }, csrMatExec_);
     std::visit([valuesTmp](const auto& exec)
-               {exec.template clear<scalar>(valuesTmp); },
-               csrMatExec_);
+                {exec.template clear<scalar>(valuesTmp); }, csrMatExec_);
 }
 
 
@@ -940,15 +977,19 @@ void Foam::csrMatrix:: applyPermutation
     //- Compute global number of equations
     nGlobalCells = returnReduce(nCells, sumOp<label>());
 
-    scalar * diag = nullptr;
-    scalar * upper = nullptr;
-    scalar * lower = nullptr;
-    scalar * extVals = nullptr;
+    const scalar * diag = nullptr;
+    const scalar * upper = nullptr;
+    const scalar * lower = nullptr;
+    const scalar * extVals = nullptr;
+    scalar * diagCons = nullptr;
+    scalar * upperCons = nullptr;
+    scalar * lowerCons = nullptr;
+    scalar * extValsCons = nullptr;
 
     if(consolidationStatus_ == ConsolidationStatus::initialized)
     {
         initializeValuesConsolidation(foamDiag, foamUpper, foamLower, foamExtVals,
-                                      diag, upper, lower, extVals);
+                                      diagCons, upperCons, lowerCons, extValsCons);
 
         totNnz = nConsRows_ + 2*nConsIntFaces_ + nConsExtNz_;
     }
@@ -987,17 +1028,34 @@ void Foam::csrMatrix:: applyPermutation
                    { valuesTmp = exec.template alloc<scalar>(totNnz); },
                     csrMatExec_);
 
-        initializeValueExt
-        (
-            nConsRows_,
-            nConsIntFaces_,
-            nConsExtNz_,
-            diag,
-            upper,
-            lower,
-            extVals,
-            valuesTmp
-        );
+        if(consolidationStatus_ == ConsolidationStatus::initialized)
+        {
+            initializeValueExt
+            (
+                nConsRows_,
+                nConsIntFaces_,
+                nConsExtNz_,
+                diagCons,
+                upperCons,
+                lowerCons,
+                extValsCons,
+                valuesTmp
+            );
+        }
+        else
+        {
+            initializeValueExt
+            (
+                nConsRows_,
+                nConsIntFaces_,
+                nConsExtNz_,
+                diag,
+                upper,
+                lower,
+                extVals,
+                valuesTmp
+            );   
+        }
         
         // Apply permutation
         applyValuePermutation
@@ -1008,16 +1066,31 @@ void Foam::csrMatrix:: applyPermutation
             valuesPtr_
         );
 
-        std::visit([diag](const auto& exec)
-                    {exec.template clear<scalar>(diag); }, csrMatExec_);
-        std::visit([upper](const auto& exec)
-                    {exec.template clear<scalar>(upper); }, csrMatExec_);
-        std::visit([lower](const auto& exec)
-                    {exec.template clear<scalar>(lower); }, csrMatExec_);
-        std::visit([extVals](const auto& exec)
-                    {exec.template clear<scalar>(extVals); }, csrMatExec_);
         std::visit([valuesTmp](const auto& exec)
-                    {exec.template clear<scalar>(valuesTmp); }, csrMatExec_);
+                        {exec.template clear<scalar>(valuesTmp); }, csrMatExec_);
+        
+        if(consolidationStatus_ == ConsolidationStatus::initialized)
+        {
+            std::visit([diagCons](const auto& exec)
+                        {exec.template clear<scalar>(diagCons); }, csrMatExec_);
+            std::visit([upperCons](const auto& exec)
+                        {exec.template clear<scalar>(upperCons); }, csrMatExec_);
+            std::visit([lowerCons](const auto& exec)
+                        {exec.template clear<scalar>(lowerCons); }, csrMatExec_);
+            std::visit([extValsCons](const auto& exec)
+                        {exec.template clear<scalar>(extValsCons); }, csrMatExec_);
+        }
+        else
+        {
+            std::visit([diag](const auto& exec)
+                        {exec.template clear<scalar>(diag); }, csrMatExec_);
+            std::visit([upper](const auto& exec)
+                        {exec.template clear<scalar>(upper); }, csrMatExec_);
+            std::visit([lower](const auto& exec)
+                        {exec.template clear<scalar>(lower); }, csrMatExec_);
+            std::visit([extVals](const auto& exec)
+                        {exec.template clear<scalar>(extVals); }, csrMatExec_);
+        }
     }
 }
 
