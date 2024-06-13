@@ -46,7 +46,7 @@ SourceFiles
 
 // AmgX
 #include <amgx_c.h>
-#include <mpi.h>
+// #include <mpi.h>
 
 #include "word.H"
 #include "scalar.H"
@@ -217,10 +217,10 @@ class AmgXWrapper
         bool                    isInitialised = false;
 
         /** \brief the global MPI communicator processes. */
-        MPI_Comm                   globalWorld_;
+        label                   globalWorld_;
 
         /** \brief the index of the global MPI communicator processes. */
-        label                   globalWorldIdx_;
+        // label                   globalWorldIdx_;
 
         /** \brief Size of \ref AmgXWrapper::globalWorld "globalWorld". */
         label                   globalWorldSize_;
@@ -229,7 +229,7 @@ class AmgXWrapper
         label                   myGlobalWorldRank_;
 
         /** \brief the index of the local node MPI communicator processes. */
-        MPI_Comm                   localWorld_;
+        label                   localWorld_;
 
         /** \brief Size of \ref AmgXWrapper::globalWorld "globalWorld". */
         label                   localWorldSize_;
@@ -238,7 +238,7 @@ class AmgXWrapper
         label                   myLocalWorldRank_;
 
         /** \brief the index of the MPI communicator processes that talk to a GPUs. */
-        MPI_Comm                   gpuWorld_;
+        label                   gpuWorld_;
 
         /** \brief Size of \ref AmgXWrapper::gpuWorld "gpuWorld". */
         label                   gpuWorldSize_;
@@ -247,7 +247,7 @@ class AmgXWrapper
         label                   myGpuWorldRank_;
 
         /** \brief the index of the MPI communicator af all the processes that tolk with GPU. */
-        MPI_Comm                   globalGpuWorld_;
+        label                   globalGpuWorld_;
 
         /** \brief Size of \ref AmgXWrapper::myGpuWorldRank_ "myGpuWorldRank_". */
         label                   globalGpuWorldSize_;

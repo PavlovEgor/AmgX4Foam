@@ -32,8 +32,7 @@ License
 #include "PstreamGlobals.H"
 
 #include "global.cuh"
-#include <iostream>
-#include <fstream>
+#include "OSspecific.H"
 
 // initialize AmgXWrapper::count to 0
 int Foam::AmgXWrapper::count = 0;
@@ -134,16 +133,15 @@ void Foam::AmgXWrapper::initialize(
 
 void Foam::AmgXWrapper::initialiseMatrixComms(csrMatrix* matrix)
 {
-    labelList gpuWorldProcs(gpuWorldSize_);
+    // labelList gpuWorldProcs(gpuWorldSize_, myGpuWorldRank_);
+    // MPI_Allgather(&myGlobalWorldRank_, 1, MPI_INT, gpuWorldProcs.data(), 1, MPI_INT, gpuWorld_);
+    // MPI_Barrier(globalWorld_);
 
-    MPI_Allgather(&myGlobalWorldRank_, 1, MPI_INT, gpuWorldProcs.data(), 1, MPI_INT, gpuWorld_);
+    // label gpuWorldIdx = UPstream::allocateCommunicator(globalWorldIdx_, gpuWorldProcs);
+    matrix->initializeComms(gpuWorld_, gpuProc_);
 
-    MPI_Barrier(globalWorld_);
-
-    label gpuWorldIdx = UPstream::allocateCommunicator(globalWorldIdx_, gpuWorldProcs);
-    matrix->initializeComms(gpuWorldIdx, gpuProc_);
-
-    MPI_Barrier(globalWorld_);
+    // MPI_Barrier(globalWorld_);
+    Pstream::barrier(globalWorld_);
 }
 
 
@@ -163,22 +161,25 @@ void Foam::AmgXWrapper::setMode(const word &modeStr)
 
 /* \implements AmgXWrapper::initComms */
 void Foam::AmgXWrapper::initComms(const int &commId)
-{
+{   
     //- duplicate the communicator
-    globalWorldIdx_ = commId;
-    globalWorld_ = PstreamGlobals::MPICommunicators_[commId];
+    globalWorld_ = commId;
+    // globalWorld_ = PstreamGlobals::MPICommunicators_[commId];
 
     //- get size and rank for communicator
     globalWorldSize_ = Pstream::nProcs(commId);
     myGlobalWorldRank_ = Pstream::myProcNo(commId);
 
-    // Get the communicator for processors on the same node (local world)
-    MPI_Comm_split_type(globalWorld_, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL, &localWorld_);
-    MPI_Comm_set_name(localWorld_, "localWorld");
+    //- Get the communicator for processors on the same node (local world)
+    // MPI_Comm_split_type(globalWorld_, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL, &localWorld_);
+    // MPI_Comm_set_name(localWorld_, "localWorld");
+    localWorld_ = Pstream::allocateIntraHostCommunicator(globalWorld_);
 
-    // get size and rank for local communicator
-    MPI_Comm_size(localWorld_, &localWorldSize_);
-    MPI_Comm_rank(localWorld_, &myLocalWorldRank_);
+    //- get size and rank for local communicator
+    // MPI_Comm_size(localWorld_, &localWorldSize_);
+    // MPI_Comm_rank(localWorld_, &myLocalWorldRank_);
+    localWorldSize_ = Pstream::nProcs(localWorld_);
+    myLocalWorldRank_ = Pstream::myProcNo(localWorld_);
 
     cudaGetDeviceCount(&nDevs_);
     
@@ -211,32 +212,55 @@ void Foam::AmgXWrapper::initComms(const int &commId)
         
         devID_ = myLocalWorldRank_;
         gpuProc_ = true;
+        nDevs_ = localWorldSize_;
     }
 
     cudaSetDevice(devID_);
 
-    MPI_Barrier(globalWorld_);
+    UPstream::barrier(globalWorld_);
 
-    // split the global world into a world involved in AmgX and a null world
-    MPI_Comm_split(globalWorld_, (int) gpuProc_, 0, &globalGpuWorld_);
+    //- split the global world into a world involved in AmgX and a null world
+    // MPI_Comm_split(globalWorld_, (int) gpuProc_, 0, &globalGpuWorld_);
+    List<bool>  gpuProcList(globalWorldSize_, false);
+    gpuProcList.data()[myGlobalWorldRank_] = gpuProc_;
+    Pstream::allGatherList(gpuProcList);
+    DynamicList<label> globalGpuWolrdProcs;
+    for(label i=0; i<globalWorldSize_; ++i){
+        if(gpuProcList[i]) globalGpuWolrdProcs.append(i);
+    }
+    globalGpuWorld_ = Pstream::allocateCommunicator(globalWorld_, globalGpuWolrdProcs);
 
-    // get size and rank for the communicator corresponding to gpuWorld
+    //- get size and rank for the communicator corresponding to gpuWorld
     if (gpuProc_)
     {
-        MPI_Comm_set_name(globalGpuWorld_, "globalGpuWorld");
-        MPI_Comm_size(globalGpuWorld_, &globalGpuWorldSize_);
-        MPI_Comm_rank(globalGpuWorld_, &myGlobalGpuWorldRank_);
+        // MPI_Comm_set_name(globalGpuWorld_, "globalGpuWorld");
+        // MPI_Comm_size(globalGpuWorld_, &globalGpuWorldSize_);
+        // MPI_Comm_rank(globalGpuWorld_, &myGlobalGpuWorldRank_);
+        globalGpuWorldSize_ = Pstream::nProcs(globalGpuWorld_);
+        myGlobalGpuWorldRank_ = Pstream::myProcNo(globalGpuWorld_);
     }
 
-    // split local world into worlds corresponding to each CUDA device
-    MPI_Comm_split(localWorld_, devID_, 0, &gpuWorld_);
-    MPI_Comm_set_name(gpuWorld_, "gpuWorld");
+    //- split local world into worlds corresponding to each CUDA device
+    // MPI_Comm_split(localWorld_, devID_, 0, &gpuWorld_);
+    // MPI_Comm_set_name(gpuWorld_, "gpuWorld");
+    labelList devIds(localWorldSize_);
+    devIds[myLocalWorldRank_] = devID_;
+    Pstream::allGatherList(devIds, UPstream::msgType(), localWorld_);
+    DynamicList<label> gpuWorldProcs;
+    for(label i=0; i<localWorldSize_; ++i)
+    {
+        if(devIds[i] == devID_) gpuWorldProcs.append(i);
+    }
+    gpuWorld_ = Pstream::allocateCommunicator(localWorld_, gpuWorldProcs);
 
-    // get size and rank for the communicator corresponding to myWorld
-    MPI_Comm_size(gpuWorld_, &gpuWorldSize_);
-    MPI_Comm_rank(gpuWorld_, &myGpuWorldRank_);
+    //- get size and rank for the communicator corresponding to myWorld
+    // MPI_Comm_size(gpuWorld_, &gpuWorldSize_);
+    // MPI_Comm_rank(gpuWorld_, &myGpuWorldRank_);
+    gpuWorldSize_ = Pstream::nProcs(gpuWorld_);
+    myGpuWorldRank_ = Pstream::myProcNo(gpuWorld_);
 
-    MPI_Barrier(globalWorld_);
+    // MPI_Barrier(globalWorld_);
+    Pstream::barrier(globalWorld_);
 }
 
 
@@ -280,7 +304,7 @@ void Foam::AmgXWrapper::initAmgX(const string &configStr)
         }
         else
         {
-            AMGX_resources_create(&rsrc, cfg, &globalGpuWorld_, 1, &devID_);
+            AMGX_resources_create(&rsrc, cfg, &PstreamGlobals::MPICommunicators_[globalGpuWorld_], 1, &devID_);
         }
     }
 
@@ -333,8 +357,6 @@ void Foam::AmgXWrapper::finalize()
         {
             AMGX_config_destroy(cfg);
         }
-        
-        if (Pstream::parRun()) MPI_Comm_free(&globalGpuWorld_);
 
         if(pCons_)
         {
@@ -345,8 +367,11 @@ void Foam::AmgXWrapper::finalize()
 
     if (Pstream::parRun()) 
     {
-        MPI_Comm_free(&gpuWorld_);
-        MPI_Comm_free(&localWorld_);    
+        // MPI_Comm_free(&gpuWorld_);
+        // MPI_Comm_free(&localWorld_);    
+        Pstream::freeCommunicator(gpuWorld_);
+        Pstream::freeCommunicator(localWorld_);
+        Pstream::freeCommunicator(globalGpuWorld_);
     }
         
     //- decrease the number of instances
@@ -422,10 +447,10 @@ void Foam::AmgXWrapper::setOperator
             labelList offsets(globalGpuWorldSize_ + 1, Zero);
 
             //- Determine the number of rows per GPU
-            labelList nRowsPerGPU(globalGpuWorldSize_, Zero);
-            /*nRowsPerGPU.data()[globalGpuWorldSize_] = nLocalRows;
-            Pstream::allGatherList(nRowsPerGPU, UPstream::msgType(), gpuGlobalWorld_);*/
-            MPI_Allgather(&nLocalRows, 1, MPI_INT, nRowsPerGPU.data(), 1, MPI_INT, globalGpuWorld_);
+            labelList nRowsPerGPU(globalGpuWorldSize_, nLocalRows);
+            // nRowsPerGPU.data()[myGlobalGpuWorldRank_] = nLocalRows;
+            Pstream::allGatherList(nRowsPerGPU, UPstream::msgType(), globalGpuWorld_);
+            // MPI_Allgather(&nLocalRows, 1, MPI_INT, nRowsPerGPU.data(), 1, MPI_INT, globalGpuWorld_);
  
             //- Calculate the global offsets
             for(int i = 0; i < globalGpuWorldSize_; ++i)
@@ -455,15 +480,22 @@ void Foam::AmgXWrapper::setOperator
 
     if(matrix->isConsolidated())
     {
-        label nConsRows = matrix->nConsRows();
-        checkCudaError(cudaMalloc((void**) &pCons_, sizeof(scalar)*nConsRows), "pCons_ cudaMalloc");
-        checkCudaError(cudaMalloc((void**) &rhsCons_, sizeof(scalar)*nConsRows), "rhsCons_ cudamalloc");
+        if(gpuProc_)
+        {
+            label nConsRows = matrix->nConsRows();
+            checkCudaError(cudaMalloc((void**) &pCons_, sizeof(scalar)*nConsRows), "pCons_ cudaMalloc");
+            checkCudaError(cudaMalloc((void**) &rhsCons_, sizeof(scalar)*nConsRows), "rhsCons_ cudamalloc");
 
-        cudaIpcGetMemHandle(&pConsHandle_, pCons_);
-        cudaIpcGetMemHandle(&rhsConsHandle_, rhsCons_);
+            cudaIpcGetMemHandle(&pConsHandle_, pCons_);
+            cudaIpcGetMemHandle(&rhsConsHandle_, rhsCons_);
+        }
 
-        MPI_Bcast(&pConsHandle_, sizeof(cudaIpcMemHandle_t), MPI_BYTE, 0, gpuWorld_);
-        MPI_Bcast(&rhsConsHandle_, sizeof(cudaIpcMemHandle_t), MPI_BYTE, 0, gpuWorld_);
+        // MPI_Bcast(&pConsHandle_, sizeof(cudaIpcMemHandle_t), MPI_BYTE, 0, PstreamGlobals::MPICommunicators_[gpuWorld_]);
+        // MPI_Bcast(&rhsConsHandle_, sizeof(cudaIpcMemHandle_t), MPI_BYTE, 0, PstreamGlobals::MPICommunicators_[gpuWorld_]);
+        Pout << "-> Sto per chiamare broadcast" << nl;
+        Pstream::broadcast((char*) &pConsHandle_, sizeof(cudaIpcMemHandle_t), gpuWorld_, Pstream::masterNo());
+        Pstream::broadcast((char*) &rhsConsHandle_, sizeof(cudaIpcMemHandle_t), gpuWorld_, Pstream::masterNo());
+        Pout << "-> ho chiamato broadcast" << nl;
         
         if(!gpuProc_)
         {
@@ -524,7 +556,8 @@ void Foam::AmgXWrapper::solve
         nRows = matrix->nConsRows();
 
         cudaDeviceSynchronize();
-        MPI_Barrier(gpuWorld_);
+        // MPI_Barrier(gpuWorld_);
+        Pstream::barrier(gpuWorld_);
 
         /*double* rhs;
         rhs = new double[nRows];
@@ -568,7 +601,7 @@ void Foam::AmgXWrapper::solve
 
         if(matrix->isConsolidated()) cudaDeviceSynchronize();
     }
-    if(Pstream::parRun()) MPI_Barrier(gpuWorld_); //necessary
+    if(Pstream::parRun()) Pstream::barrier(gpuWorld_); // MPI_Barrier(gpuWorld_); //necessary
 
     if (matrix->isConsolidated())
     {
@@ -576,7 +609,8 @@ void Foam::AmgXWrapper::solve
                        "pscalar back cudaMemcpy");
 
         cudaDeviceSynchronize();
-        MPI_Barrier(gpuWorld_);
+        // MPI_Barrier(gpuWorld_);
+        Pstream::barrier(gpuWorld_);
     }
 }
 
