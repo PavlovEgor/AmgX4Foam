@@ -524,9 +524,15 @@ void Foam::AmgXWrapper::getIters(label &iter)
 
 
 /* \implements AmgXWrapper::getResidual */
-void Foam::AmgXWrapper::getResidual(const label &iter, scalarField &res)
+void Foam::AmgXWrapper::getResidual(const label &iter, scalarField &res, label nBlocks)
 {
-    if (gpuProc_) AMGX_solver_get_iteration_residual(solver, iter, 0, res.data());
+    if (gpuProc_)
+    {
+	    for (label nres=0;nres<nBlocks; nres++)
+	    {
+            AMGX_solver_get_iteration_residual(solver, iter, nres, res.data()+nres);
+	    }
+    }
 }
 
 

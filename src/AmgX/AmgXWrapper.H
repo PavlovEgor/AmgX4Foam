@@ -195,7 +195,8 @@ class AmgXWrapper
         void getResidual
         (
             const label &iter,
-            scalarField &res
+            scalarField &res,
+			label nres = 1
         );
 
 
