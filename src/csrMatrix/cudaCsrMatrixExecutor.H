@@ -70,6 +70,9 @@ public:
     const Type* copyFromFoam(Foam::label size, const Type* hostPtr) const;
 
     template<class Type>
+    void copyToFoam(Foam::label size, Type* devPtr, Type** hostPtr) const;
+
+    template<class Type>
     void clear(Type* ptr) const;
 
     template<class Type>

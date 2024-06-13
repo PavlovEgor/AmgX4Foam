@@ -458,6 +458,33 @@ public:
             //- Deallocate useless addressing pointer
             void finalize();
 
+            void printValues()
+            {
+            	label size = nLocalNz_*nBlocks_*nBlocks_;
+            	Info << "SIZE: " << size << endl;
+            	scalarField val(size);
+            	scalar* valData = val.data();
+            	scalar** valPtr = &valData;
+                std::visit([this, &valPtr, size](const auto& exec)
+                           { exec.template copyToFoam<scalar>(size, this->valuesPtr_, valPtr);},
+                           csrMatExec_);
+                Info << "printing values :" << val << endl;
+
+            };
+
+            void printLdu2csr()
+            {
+            	label size = nLocalNz_;
+            	Info << "SIZE: " << size << endl;
+            	labelField val(size);
+            	label* valData = val.data();
+            	label** valPtr = &valData;
+                std::visit([this, &valPtr, size](const auto& exec)
+                           { exec.template copyToFoam<label>(size, this->ldu2csrPerm_, valPtr);},
+                           csrMatExec_);
+                Info << "printing ldu2csr :" << val << endl;
+
+            };
 };
 
 

@@ -366,6 +366,24 @@ const Type* Foam::cudaCsrMatrixExecutor::copyFromFoam
 }
 
 template<class Type>
+void Foam::cudaCsrMatrixExecutor::copyToFoam
+(
+    Foam::label size,
+	Type* devPtr,
+	Type** hostPtr
+) const
+{
+
+	int err = CHECK_CUDA_ERROR(cudaMemcpy(*hostPtr, devPtr, (size_t) size*sizeof(Type), cudaMemcpyDeviceToHost));
+    if (err != 0)
+    {
+        FatalErrorInFunction << "ERROR: cudaMemcpy returned " << err << abort(FatalError);
+    }
+
+}
+
+
+template<class Type>
 void Foam::cudaCsrMatrixExecutor::clear(Type* ptr) const
 {
     if (ptr)
@@ -802,6 +820,12 @@ void Foam::cudaCsrMatrixExecutor::applyValuePermutation
     (                                                                         \
         Foam::label size,                                                     \
         const Type* hostPtr                                                   \
+    ) const;                                                                  \
+    template void Foam::cudaCsrMatrixExecutor::copyToFoam<Type>         \
+    (                                                                         \
+        Foam::label size,                                                     \
+        Type* devPtr,                                                    \
+        Type** hostPtr                                                        \
     ) const;                                                                  \
     template void  Foam::cudaCsrMatrixExecutor::clear<Type>               \
     (                                                                         \

@@ -30,6 +30,7 @@ License
 // ************************************************************************* //
 
 #include "cpuCsrMatrixExecutor.H"
+#include "zero.H"
 #include <cmath>
 #include <bits/stdc++.h>
 
@@ -68,6 +69,17 @@ const Type* Foam::cpuCsrMatrixExecutor::copyFromFoam
 {
     const Type* ptr = (Type*) hostPtr;
 	return ptr;
+}
+
+template<class Type>
+void Foam::cpuCsrMatrixExecutor::copyToFoam
+(
+    Foam::label size,
+	Type* devPtr,
+	Type** hostPtr
+) const
+{
+    *hostPtr = devPtr;
 }
 
 template<class Type>
@@ -369,6 +381,12 @@ void Foam::cpuCsrMatrixExecutor::applyValuePermutation
     (                                                                     \
         Foam::label size,                                                 \
         const Type* hostPtr                                               \
+    ) const;                                                              \
+    template void Foam::cpuCsrMatrixExecutor::copyToFoam<Type>            \
+    (                                                                     \
+        Foam::label size,                                                 \
+        Type* devPtr,                                                     \
+        Type** hostPtr                                                    \
     ) const;                                                              \
     template void  Foam::cpuCsrMatrixExecutor::clear<Type>                \
     (                                                                     \
