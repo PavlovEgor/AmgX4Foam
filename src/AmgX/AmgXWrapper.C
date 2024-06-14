@@ -133,14 +133,8 @@ void Foam::AmgXWrapper::initialize(
 
 void Foam::AmgXWrapper::initialiseMatrixComms(csrMatrix* matrix)
 {
-    // labelList gpuWorldProcs(gpuWorldSize_, myGpuWorldRank_);
-    // MPI_Allgather(&myGlobalWorldRank_, 1, MPI_INT, gpuWorldProcs.data(), 1, MPI_INT, gpuWorld_);
-    // MPI_Barrier(globalWorld_);
-
-    // label gpuWorldIdx = UPstream::allocateCommunicator(globalWorldIdx_, gpuWorldProcs);
     matrix->initializeComms(gpuWorld_, gpuProc_);
 
-    // MPI_Barrier(globalWorld_);
     Pstream::barrier(globalWorld_);
 }
 
@@ -154,30 +148,27 @@ void Foam::AmgXWrapper::setMode(const word &modeStr)
         mode = AMGX_mode_dDFI;
     else if (modeStr == "dFFI")
         mode = AMGX_mode_dFFI;
-    else // NOTA: non ho usato la funzione SETERRQ perchè non ho capito dove è implementata e non ho MPI in questo caso
-        Info << modeStr.c_str() << " is not an available mode! Available modes are: dDDI, dDFI, dFFI." <<  nl;
+    else
+        FatalErrorInFunction
+            << modeStr.c_str() << " is not an available mode! Available modes are: dDDI, dDFI, dFFI." <<  nl 
+            << abort(FatalError);
 }
 
 
 /* \implements AmgXWrapper::initComms */
 void Foam::AmgXWrapper::initComms(const int &commId)
 {   
-    //- duplicate the communicator
+    //- Assign global communicator
     globalWorld_ = commId;
-    // globalWorld_ = PstreamGlobals::MPICommunicators_[commId];
 
-    //- get size and rank for communicator
+    //- Get size and rank for communicator
     globalWorldSize_ = Pstream::nProcs(commId);
     myGlobalWorldRank_ = Pstream::myProcNo(commId);
 
     //- Get the communicator for processors on the same node (local world)
-    // MPI_Comm_split_type(globalWorld_, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL, &localWorld_);
-    // MPI_Comm_set_name(localWorld_, "localWorld");
     localWorld_ = Pstream::allocateIntraHostCommunicator(globalWorld_);
 
-    //- get size and rank for local communicator
-    // MPI_Comm_size(localWorld_, &localWorldSize_);
-    // MPI_Comm_rank(localWorld_, &myLocalWorldRank_);
+    //- Get size and rank for local communicator
     localWorldSize_ = Pstream::nProcs(localWorld_);
     myLocalWorldRank_ = Pstream::myProcNo(localWorld_);
 
@@ -208,7 +199,7 @@ void Foam::AmgXWrapper::initComms(const int &commId)
     else
     {
         Info << "CUDA devices per node are more than the MPI processes launched on the node. Only " 
-        << localWorldSize_ << " CUDA devices will be used." << nl;
+             << localWorldSize_ << " CUDA devices will be used." << nl;
         
         devID_ = myLocalWorldRank_;
         gpuProc_ = true;
@@ -220,7 +211,6 @@ void Foam::AmgXWrapper::initComms(const int &commId)
     UPstream::barrier(globalWorld_);
 
     //- split the global world into a world involved in AmgX and a null world
-    // MPI_Comm_split(globalWorld_, (int) gpuProc_, 0, &globalGpuWorld_);
     List<bool>  gpuProcList(globalWorldSize_, false);
     gpuProcList.data()[myGlobalWorldRank_] = gpuProc_;
     Pstream::allGatherList(gpuProcList);
@@ -230,19 +220,14 @@ void Foam::AmgXWrapper::initComms(const int &commId)
     }
     globalGpuWorld_ = Pstream::allocateCommunicator(globalWorld_, globalGpuWolrdProcs);
 
-    //- get size and rank for the communicator corresponding to gpuWorld
+    //- Get size and rank for the communicator corresponding to gpuWorld
     if (gpuProc_)
     {
-        // MPI_Comm_set_name(globalGpuWorld_, "globalGpuWorld");
-        // MPI_Comm_size(globalGpuWorld_, &globalGpuWorldSize_);
-        // MPI_Comm_rank(globalGpuWorld_, &myGlobalGpuWorldRank_);
         globalGpuWorldSize_ = Pstream::nProcs(globalGpuWorld_);
         myGlobalGpuWorldRank_ = Pstream::myProcNo(globalGpuWorld_);
     }
 
-    //- split local world into worlds corresponding to each CUDA device
-    // MPI_Comm_split(localWorld_, devID_, 0, &gpuWorld_);
-    // MPI_Comm_set_name(gpuWorld_, "gpuWorld");
+    //- Split local world into worlds corresponding to each CUDA device
     labelList devIds(localWorldSize_);
     devIds[myLocalWorldRank_] = devID_;
     Pstream::allGatherList(devIds, UPstream::msgType(), localWorld_);
@@ -253,13 +238,10 @@ void Foam::AmgXWrapper::initComms(const int &commId)
     }
     gpuWorld_ = Pstream::allocateCommunicator(localWorld_, gpuWorldProcs);
 
-    //- get size and rank for the communicator corresponding to myWorld
-    // MPI_Comm_size(gpuWorld_, &gpuWorldSize_);
-    // MPI_Comm_rank(gpuWorld_, &myGpuWorldRank_);
+    //- Get size and rank for the communicator corresponding to myWorld
     gpuWorldSize_ = Pstream::nProcs(gpuWorld_);
     myGpuWorldRank_ = Pstream::myProcNo(gpuWorld_);
 
-    // MPI_Barrier(globalWorld_);
     Pstream::barrier(globalWorld_);
 }
 
@@ -366,9 +348,7 @@ void Foam::AmgXWrapper::finalize()
     }
 
     if (Pstream::parRun()) 
-    {
-        // MPI_Comm_free(&gpuWorld_);
-        // MPI_Comm_free(&localWorld_);    
+    {   
         Pstream::freeCommunicator(gpuWorld_);
         Pstream::freeCommunicator(localWorld_);
         Pstream::freeCommunicator(globalGpuWorld_);
@@ -448,9 +428,7 @@ void Foam::AmgXWrapper::setOperator
 
             //- Determine the number of rows per GPU
             labelList nRowsPerGPU(globalGpuWorldSize_, nLocalRows);
-            // nRowsPerGPU.data()[myGlobalGpuWorldRank_] = nLocalRows;
             Pstream::allGatherList(nRowsPerGPU, UPstream::msgType(), globalGpuWorld_);
-            // MPI_Allgather(&nLocalRows, 1, MPI_INT, nRowsPerGPU.data(), 1, MPI_INT, globalGpuWorld_);
  
             //- Calculate the global offsets
             for(int i = 0; i < globalGpuWorldSize_; ++i)
@@ -490,12 +468,8 @@ void Foam::AmgXWrapper::setOperator
             cudaIpcGetMemHandle(&rhsConsHandle_, rhsCons_);
         }
 
-        // MPI_Bcast(&pConsHandle_, sizeof(cudaIpcMemHandle_t), MPI_BYTE, 0, PstreamGlobals::MPICommunicators_[gpuWorld_]);
-        // MPI_Bcast(&rhsConsHandle_, sizeof(cudaIpcMemHandle_t), MPI_BYTE, 0, PstreamGlobals::MPICommunicators_[gpuWorld_]);
-        Pout << "-> Sto per chiamare broadcast" << nl;
         Pstream::broadcast((char*) &pConsHandle_, sizeof(cudaIpcMemHandle_t), gpuWorld_, Pstream::masterNo());
         Pstream::broadcast((char*) &rhsConsHandle_, sizeof(cudaIpcMemHandle_t), gpuWorld_, Pstream::masterNo());
-        Pout << "-> ho chiamato broadcast" << nl;
         
         if(!gpuProc_)
         {
@@ -547,26 +521,16 @@ void Foam::AmgXWrapper::solve
     if(matrix->isConsolidated())
     {       
         consDispl = matrix->rowsConsDisp()[myGpuWorldRank_];
-        checkCudaError(cudaMemcpy((void*) &pCons_[consDispl], pscalar, nLocalRows*sizeof(scalar), cudaMemcpyHostToDevice ), // cudaMemcpyDefault);
+        checkCudaError(cudaMemcpy((void*) &pCons_[consDispl], pscalar, nLocalRows*sizeof(scalar), cudaMemcpyHostToDevice ),
                        "psi cudaMemcpy");
-        checkCudaError(cudaMemcpy((void*) &rhsCons_[consDispl], (void*) bscalar, nLocalRows*sizeof(scalar), cudaMemcpyHostToDevice ), // cudaMemcpyDefault);
+        checkCudaError(cudaMemcpy((void*) &rhsCons_[consDispl], (void*) bscalar, nLocalRows*sizeof(scalar), cudaMemcpyHostToDevice ),
                        "b cudaMemcpy");
         p = pCons_;
         b = rhsCons_;
         nRows = matrix->nConsRows();
 
         cudaDeviceSynchronize();
-        // MPI_Barrier(gpuWorld_);
         Pstream::barrier(gpuWorld_);
-
-        /*double* rhs;
-        rhs = new double[nRows];
-        cudaMemcpy((void*)rhs, (const void*)b, sizeof(double)*nRows, cudaMemcpyDeviceToHost );
-        std::string fileName = "bscalar" + std::to_string(Pstream::myProcNo());
-        std::ofstream outFile5(fileName);
-        outFile5 << "bscalar:" << nl;
-        for(int i=0; i< nRows; ++i) outFile5 << rhs[i] << nl;
-        outFile5.close();*/
     }
     else
     {
@@ -601,7 +565,7 @@ void Foam::AmgXWrapper::solve
 
         if(matrix->isConsolidated()) cudaDeviceSynchronize();
     }
-    if(Pstream::parRun()) Pstream::barrier(gpuWorld_); // MPI_Barrier(gpuWorld_); //necessary
+    if(Pstream::parRun()) Pstream::barrier(gpuWorld_); //necessary
 
     if (matrix->isConsolidated())
     {
@@ -609,7 +573,6 @@ void Foam::AmgXWrapper::solve
                        "pscalar back cudaMemcpy");
 
         cudaDeviceSynchronize();
-        // MPI_Barrier(gpuWorld_);
         Pstream::barrier(gpuWorld_);
     }
 }

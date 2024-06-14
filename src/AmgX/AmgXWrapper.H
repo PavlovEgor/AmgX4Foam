@@ -46,7 +46,6 @@ SourceFiles
 
 // AmgX
 #include <amgx_c.h>
-// #include <mpi.h>
 
 #include "word.H"
 #include "scalar.H"
