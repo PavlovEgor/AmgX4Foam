@@ -28,6 +28,7 @@ License
 
 #include "PstreamGlobals.H"
 #include "csrMatrix.H"
+#include "global.cuh"
 
 #include "globalIndex.H"
 
@@ -136,6 +137,16 @@ void Foam::csrMatrix::finalize()
     if (extNzConsDispPtr_)
     {
         delete extNzConsDispPtr_;
+    }
+
+    if(psiCons_)
+    {
+        cudaFree(psiCons_);
+    }
+
+    if(rhsCons_)
+    {
+        cudaFree(rhsCons_);
     }
 }
 
@@ -320,6 +331,25 @@ void Foam::csrMatrix::initializeConsolidation
     consolidationStatus_ = ConsolidationStatus::initialized;
 
     UPstream::barrier(gpuWorld_);
+    
+    if(gpuProc_)
+    {
+
+        cudaMalloc((void**) &psiCons_, sizeof(scalar)*nConsRows_);
+        cudaMalloc((void**) &rhsCons_, sizeof(scalar)*nConsRows_);
+
+        cudaIpcGetMemHandle(&psiConsHandle_, psiCons_);
+        cudaIpcGetMemHandle(&rhsConsHandle_, rhsCons_);
+    }
+
+    Pstream::broadcast((char*) &psiConsHandle_, sizeof(cudaIpcMemHandle_t), gpuWorld_, Pstream::masterNo());
+    Pstream::broadcast((char*) &rhsConsHandle_, sizeof(cudaIpcMemHandle_t), gpuWorld_, Pstream::masterNo());
+    
+    if(!gpuProc_)
+    {
+        cudaIpcOpenMemHandle((void**) &psiCons_, psiConsHandle_, cudaIpcMemLazyEnablePeerAccess );
+        cudaIpcOpenMemHandle((void**) &rhsCons_, rhsConsHandle_, cudaIpcMemLazyEnablePeerAccess );
+    }
 
     return;
 }
@@ -415,6 +445,7 @@ void Foam::csrMatrix::computePermutation(const lduAddressing * addr)
 
     nOwnerStart_ = nCells+1;
     nLocalNz_ = totNnz;
+    nConsRows_ = nCells;
 
     //ownerStartPtr_ = new label[nCells+1];
     //ldu2csrPerm_ = new label[totNnz];
@@ -910,7 +941,7 @@ void Foam::csrMatrix::applyPermutation(const lduMatrix& lduMatrix)
 
 
 //- Apply permutation from LDU to CSR considering the interface values
-void Foam::csrMatrix:: applyPermutation
+void Foam::csrMatrix::applyPermutation
 (
     const lduMatrix& lduMatrix,
     const FieldField<Field, scalar> interfaceBouCoeffs,
@@ -1086,6 +1117,34 @@ void Foam::csrMatrix:: applyPermutation
 }
 
 
+void Foam::csrMatrix::createConsVect
+(
+    const scalarField& rhs,
+          scalarField& psi
+)
+{
+    if(isConsolidated())
+    {
+        label consDispl = rowsConsDispPtr_->cdata()[myGpuWorldRank_];
+        cudaMemcpy(&psiCons_[consDispl], psi.cdata(), psi.size()*sizeof(scalar), cudaMemcpyHostToDevice );
+        cudaMemcpy(&rhsCons_[consDispl], rhs.cdata(), rhs.size()*sizeof(scalar), cudaMemcpyHostToDevice );
+    }
+    else
+    {
+        rhsCons_ = const_cast<scalar*>(rhs.cdata());
+        psiCons_ = psi.data();
+    }
+}
+
+
+void Foam::csrMatrix::distributeSolution(scalarField& psi)
+{
+    if(isConsolidated())
+    {
+        label consDispl = rowsConsDispPtr_->cdata()[myGpuWorldRank_];
+        cudaMemcpy(psi.data(), &psiCons_[consDispl], psi.size()*sizeof(scalar), cudaMemcpyDeviceToHost);
+    }
+}
 // * * * * * * * * * * * * * Explicit instantiations  * * * * * * * * * * * //
 
 // ************************************************************************* //

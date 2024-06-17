@@ -175,9 +175,6 @@ class AmgXWrapper
          */
         void solve
         (
-            const int nLocalRows,
-            scalar* pscalar,
-            const scalar* bscalar,
             const csrMatrix* matrix
         );
 
@@ -294,16 +291,6 @@ class AmgXWrapper
          * as a static member to keep only one instance.
          */
         static AMGX_resources_handle   rsrc;
-
-        /** \brief AmgX solver object. */
-        scalar*               pCons_ = nullptr;
-        
-        cudaIpcMemHandle_t    pConsHandle_;
-
-        /** \brief AmgX solver object. */
-        scalar*             rhsCons_ = nullptr;
-
-        cudaIpcMemHandle_t    rhsConsHandle_;
 
         /** \brief Set AmgX solver mode based on the user-provided string.
          *

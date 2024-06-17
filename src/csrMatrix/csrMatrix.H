@@ -113,6 +113,12 @@ protected:
         //- Coefficients
         scalar* valuesPtr_;
 
+        //- Consolidated variable array
+        scalar* psiCons_;
+
+        //- Consolidated RHS array
+        scalar* rhsCons_;
+
         //- Rows diplacement between consolidated processes
         labelList* rowsConsDispPtr_;
 
@@ -138,7 +144,10 @@ protected:
         label myGpuWorldRank_;
 
         //- Indication if the process talk directly to GPU
-        bool gpuProc_ = false;        
+        bool gpuProc_ = false;
+
+        cudaIpcMemHandle_t psiConsHandle_;
+        cudaIpcMemHandle_t rhsConsHandle_;   
 
     //- Protected functions
         void initializeConsolidation
@@ -401,6 +410,16 @@ public:
                 return (valuesPtr_);
             }
 
+            const scalar* rhsCons() const
+            {
+                return rhsCons_;
+            }
+
+            scalar* psiCons() const
+            {
+                return psiCons_;
+            }
+
         //- Operations
 
             //- Set number of blocks
@@ -425,6 +444,16 @@ public:
                 const FieldField<Field, scalar> interfaceBouCoeffs,
                       label& nGlobalCells
             );
+
+            //- Allocate consolidated variable and source vector
+            void createConsVect
+            (
+                const scalarField& rhs,
+                      scalarField& psi
+            );
+
+            //- Redistribute solution vector
+            void distributeSolution(scalarField& psi);
 
             //- Deallocate useless addressing pointer
             void finalize();

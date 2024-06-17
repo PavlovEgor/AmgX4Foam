@@ -159,7 +159,11 @@ Foam::solverPerformance Foam::AmgXSolver::solve
         amgx.updateOperator(&Amat);
     }
 
-    amgx.solve(nCells, psi.data(), source.cdata(), &Amat);
+    Amat.createConsVect(source, psi);
+
+    amgx.solve(&Amat);
+
+    Amat.distributeSolution(psi);
 
     scalarField iNorm(1, 0.0);
     amgx.getResidual(0, iNorm);

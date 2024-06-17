@@ -339,12 +339,6 @@ void Foam::AmgXWrapper::finalize()
         {
             AMGX_config_destroy(cfg);
         }
-
-        if(pCons_)
-        {
-            cudaFree(pCons_);
-            cudaFree(rhsCons_);
-        }
     }
 
     if (Pstream::parRun()) 
@@ -455,28 +449,6 @@ void Foam::AmgXWrapper::setOperator
         AMGX_vector_bind(AmgXP, AmgXA);
         AMGX_vector_bind(AmgXRHS, AmgXA);
     }
-
-    if(matrix->isConsolidated())
-    {
-        if(gpuProc_)
-        {
-            label nConsRows = matrix->nConsRows();
-            checkCudaError(cudaMalloc((void**) &pCons_, sizeof(scalar)*nConsRows), "pCons_ cudaMalloc");
-            checkCudaError(cudaMalloc((void**) &rhsCons_, sizeof(scalar)*nConsRows), "rhsCons_ cudamalloc");
-
-            cudaIpcGetMemHandle(&pConsHandle_, pCons_);
-            cudaIpcGetMemHandle(&rhsConsHandle_, rhsCons_);
-        }
-
-        Pstream::broadcast((char*) &pConsHandle_, sizeof(cudaIpcMemHandle_t), gpuWorld_, Pstream::masterNo());
-        Pstream::broadcast((char*) &rhsConsHandle_, sizeof(cudaIpcMemHandle_t), gpuWorld_, Pstream::masterNo());
-        
-        if(!gpuProc_)
-        {
-            cudaIpcOpenMemHandle((void**) &pCons_, pConsHandle_, cudaIpcMemLazyEnablePeerAccess );
-            cudaIpcOpenMemHandle((void**) &rhsCons_, rhsConsHandle_, cudaIpcMemLazyEnablePeerAccess );
-        }
-    }
 }
 
 
@@ -504,40 +476,15 @@ void Foam::AmgXWrapper::updateOperator
 /* \implements AmgXWrapper::solve */
 void Foam::AmgXWrapper::solve
 (
-    const int nLocalRows,
-    scalar* pscalar,
-    const scalar* bscalar,
     const csrMatrix* matrix
 )
 {    
-    scalar * p;
-    const scalar * b;
-    label consDispl;
-    label nRows, nBlocks;
+    scalar * p = matrix->psiCons();
+    const scalar * b = matrix->rhsCons();
+    label nRows = matrix->nConsRows();
 
     // nLocalRows = matrix->ownerStart().size() - 1;
-    nBlocks = matrix->nBlocks();
-
-    if(matrix->isConsolidated())
-    {       
-        consDispl = matrix->rowsConsDisp()[myGpuWorldRank_];
-        checkCudaError(cudaMemcpy((void*) &pCons_[consDispl], pscalar, nLocalRows*sizeof(scalar), cudaMemcpyHostToDevice ),
-                       "psi cudaMemcpy");
-        checkCudaError(cudaMemcpy((void*) &rhsCons_[consDispl], (void*) bscalar, nLocalRows*sizeof(scalar), cudaMemcpyHostToDevice ),
-                       "b cudaMemcpy");
-        p = pCons_;
-        b = rhsCons_;
-        nRows = matrix->nConsRows();
-
-        cudaDeviceSynchronize();
-        Pstream::barrier(gpuWorld_);
-    }
-    else
-    {
-        p = pscalar;
-        b = bscalar;
-        nRows = nLocalRows;
-    }
+    label nBlocks = matrix->nBlocks();
     
     if (gpuProc_)
     {    
@@ -566,15 +513,6 @@ void Foam::AmgXWrapper::solve
         if(matrix->isConsolidated()) cudaDeviceSynchronize();
     }
     if(Pstream::parRun()) Pstream::barrier(gpuWorld_); //necessary
-
-    if (matrix->isConsolidated())
-    {
-        checkCudaError(cudaMemcpy((void*) pscalar, &pCons_[consDispl], nLocalRows*sizeof(scalar), cudaMemcpyDeviceToHost),
-                       "pscalar back cudaMemcpy");
-
-        cudaDeviceSynchronize();
-        Pstream::barrier(gpuWorld_);
-    }
 }
 
 
