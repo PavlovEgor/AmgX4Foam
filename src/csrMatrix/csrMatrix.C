@@ -335,8 +335,8 @@ void Foam::csrMatrix::initializeConsolidation
     if(gpuProc_)
     {
 
-        cudaMalloc((void**) &psiCons_, sizeof(scalar)*nConsRows_);
-        cudaMalloc((void**) &rhsCons_, sizeof(scalar)*nConsRows_);
+        cudaMalloc((void**) &psiCons_, sizeof(scalar)*nConsRows_*nBlocks_);
+        cudaMalloc((void**) &rhsCons_, sizeof(scalar)*nConsRows_*nBlocks_);
 
         cudaIpcGetMemHandle(&psiConsHandle_, psiCons_);
         cudaIpcGetMemHandle(&rhsConsHandle_, rhsCons_);
