@@ -428,6 +428,12 @@ public:
                 nBlocks_ = n;
             }
 
+            //- Set number of blocks
+            void setGpuProc(bool proc)
+            {
+                gpuProc_ = proc;
+            }
+
             //- Deallocate useless addressing pointer
             void clearAddressing();
 
