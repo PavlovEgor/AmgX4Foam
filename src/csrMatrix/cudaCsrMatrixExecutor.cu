@@ -498,21 +498,24 @@ void Foam::cudaCsrMatrixExecutor::initializeAddressingExt
         colIndTmp
     );
 
-    label numBlocks = (nnzExt + NUM_THREADS_PER_BLOCK - 1) / NUM_THREADS_PER_BLOCK;
-    cudaInitializeAddrExt<<<numBlocks, NUM_THREADS_PER_BLOCK>>>
-    (
-        nCells,
-        nInternalFaces,
-        nnzExt,
-        extRows,
-        extCols,
-        rowIndTmp,
-        colIndTmp
-    );
+    if (nnzExt > 0)
+    {
+        label numBlocks = (nnzExt + NUM_THREADS_PER_BLOCK - 1) / NUM_THREADS_PER_BLOCK;
+        cudaInitializeAddrExt<<<numBlocks, NUM_THREADS_PER_BLOCK>>>
+        (
+            nCells,
+            nInternalFaces,
+            nnzExt,
+            extRows,
+            extCols,
+            rowIndTmp,
+            colIndTmp
+        );
 
-    cudaDeviceSynchronize();
+        cudaDeviceSynchronize();
 
-    CHECK_LAST_CUDA_ERROR();
+        CHECK_LAST_CUDA_ERROR();
+    }
     return;
 }
 
