@@ -335,8 +335,12 @@ void Foam::csrMatrix::initializeConsolidation
     if(gpuProc_)
     {
 
-        cudaMalloc((void**) &psiCons_, sizeof(scalar)*nConsRows_*nBlocks_);
-        cudaMalloc((void**) &rhsCons_, sizeof(scalar)*nConsRows_*nBlocks_);
+        std::visit([this](const auto& exec)
+               { this->psiCons_ = exec.template allocZero<scalar>(nBlocks_*nConsRows_);
+                 this->rhsCons_ = exec.template allocZero<scalar>(nBlocks_*nConsRows_); },
+               this->csrMatExec_);
+        //cudaMalloc((void**) &psiCons_, sizeof(scalar)*nConsRows_*nBlocks_);
+        //cudaMalloc((void**) &rhsCons_, sizeof(scalar)*nConsRows_*nBlocks_);
 
         cudaIpcGetMemHandle(&psiConsHandle_, psiCons_);
         cudaIpcGetMemHandle(&rhsConsHandle_, rhsCons_);
@@ -350,7 +354,6 @@ void Foam::csrMatrix::initializeConsolidation
         cudaIpcOpenMemHandle((void**) &psiCons_, psiConsHandle_, cudaIpcMemLazyEnablePeerAccess );
         cudaIpcOpenMemHandle((void**) &rhsCons_, rhsConsHandle_, cudaIpcMemLazyEnablePeerAccess );
     }
-
     return;
 }
 
