@@ -32,7 +32,6 @@ License
 #include "cudaCsrMatrixExecutor.H"
 
 #include "scalar.H"
-#include "csrMatrix.H"
 #include "global.cuh"
 #include <cub/cub.cuh>
 

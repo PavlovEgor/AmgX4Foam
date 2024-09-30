@@ -10,7 +10,6 @@ EXE_INC = \
 
 LIB_LIBS = \
     -lfiniteVolume \
-    -lfvOptions \
     -lmeshTools \
     -L$(AMGX_LIB) -lamgxsh -fopenmp \
     -L$(FOAM_USER_LIBBIN)
