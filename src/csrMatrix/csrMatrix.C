@@ -433,6 +433,7 @@ void Foam::csrMatrix::computePermutation(const lduAddressing * addr)
 	const label* hostNeigh = addr->upperAddr().cdata();
 	label neighSize = addr->upperAddr().size();
 
+    // check if ptrs are valid gpu pointers
 	std::visit([&hostOwn, &own, ownSize](const auto& exec)
                { own = exec.template copyFromFoam<label>(ownSize,hostOwn); },
                csrMatExec_);
@@ -888,16 +889,37 @@ void Foam::csrMatrix::applyPermutation(const lduMatrix& lduMatrix)
     const scalar * upper = nullptr;
     const scalar * lower = nullptr;
 
+    bool valid;
+    std::visit([&](const auto& exec){valid = exec.template isDeviceValid<scalar>(foamDiag);},csrMatExec_);
+    if (valid)
+    {
+        diag = foamDiag;
+    }else{
     std::visit([&foamDiag, &diag, nCells](const auto& exec)
-               { diag = exec.template copyFromFoam<scalar>(nCells, foamDiag); },
-               csrMatExec_);
-    std::visit([&foamUpper, &upper, nIntFaces](const auto& exec)
-               { upper = exec.template copyFromFoam<scalar>(nIntFaces, foamUpper); },
-               csrMatExec_);
-    std::visit([&foamLower, &lower, nIntFaces](const auto& exec)
-               { lower = exec.template copyFromFoam<scalar>(nIntFaces, foamLower); },
-               csrMatExec_);
-
+            { diag = exec.template copyFromFoam<scalar>(nCells, foamDiag); },
+            csrMatExec_);
+    }
+    
+    std::visit([&](const auto& exec){valid = exec.template isDeviceValid(foamUpper);}, csrMatExec_);
+    if (valid)
+    {
+        upper = foamUpper;
+    }else{
+        std::visit([&foamUpper, &upper, nIntFaces](const auto& exec)
+                { upper = exec.template copyFromFoam<scalar>(nIntFaces, foamUpper); },
+                csrMatExec_);
+    }
+    
+    std::visit([&](const auto& exec){valid = exec.template isDeviceValid(foamLower);}, csrMatExec_);
+    if (valid)
+    {
+        lower = foamLower;
+    }else{
+        std::visit([&foamLower, &lower, nIntFaces](const auto& exec)
+                { lower = exec.template copyFromFoam<scalar>(nIntFaces, foamLower); },
+                csrMatExec_);
+    }
+    
     if(!valuesPtr_)
     {
         // valuesPtr_ = new scalarField(totNnz);
@@ -932,12 +954,16 @@ void Foam::csrMatrix::applyPermutation(const lduMatrix& lduMatrix)
         valuesPtr_
     );
 
-    std::visit([diag](const auto& exec)
+    if (diag != foamDiag)
+        std::visit([diag](const auto& exec)
                 {exec.template clear<scalar>(diag); }, csrMatExec_);
-    std::visit([upper](const auto& exec)
+    if (upper != foamUpper)
+        std::visit([upper](const auto& exec)
                 {exec.template clear<scalar>(upper); }, csrMatExec_);
-    std::visit([lower](const auto& exec)
+    if (lower != foamLower)
+        std::visit([lower](const auto& exec)
                 {exec.template clear<scalar>(lower); }, csrMatExec_);
+
     std::visit([valuesTmp](const auto& exec)
                 {exec.template clear<scalar>(valuesTmp); }, csrMatExec_);
 }

@@ -60,6 +60,9 @@ public:
 
     ~cudaCsrMatrixExecutor() {};
 
+    template <class Type>
+    bool isDeviceValid(const Type* ptr) const;
+
     template<class Type>
     Type* alloc(Foam::label size) const;
 

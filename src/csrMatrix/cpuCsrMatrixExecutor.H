@@ -61,6 +61,9 @@ public:
     ~cpuCsrMatrixExecutor() {};
 
     template<class Type>
+    bool isDeviceValid(const Type* ptr) const {return false;};
+
+    template<class Type>
     Type* alloc(Foam::label size) const;
 
     template<class Type>

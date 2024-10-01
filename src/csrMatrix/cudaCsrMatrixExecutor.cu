@@ -306,6 +306,22 @@ void cudaApplyValuePermutation
 // * * * * * * * * * * * * * *  Wrapper functions * * * * * * * * * * * * * * //
 
 template<class Type>
+bool Foam::cudaCsrMatrixExecutor::isDeviceValid
+(
+    const Type* ptr
+) const
+{
+    bool valid = false;
+
+    cudaPointerAttributes attr;
+    CHECK_CUDA_ERROR(cudaPointerGetAttributes(&attr,(void*)ptr));
+    if(attr.devicePointer)
+        valid = true;
+
+    return valid;
+}
+
+template<class Type>
 Type* Foam::cudaCsrMatrixExecutor::alloc
 (
     Foam::label size
@@ -810,6 +826,10 @@ void Foam::cudaCsrMatrixExecutor::applyValuePermutation
 // * * * * * * * * * * * * * Explicit instantiations  * * * * * * * * * * *  //
 
 #define makecudaCsrMatrixExecutor(Type)                                   \
+    template bool Foam::cudaCsrMatrixExecutor::isDeviceValid<Type>               \
+    (                                                                         \
+        const Type* ptr                                                      \
+    ) const;\
     template Type* Foam::cudaCsrMatrixExecutor::alloc<Type>               \
     (                                                                         \
         Foam::label size                                                      \
