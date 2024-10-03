@@ -445,6 +445,23 @@ void Foam::cudaCsrMatrixExecutor::concatenate
     }
 }
 
+void Foam::cudaCsrMatrixExecutor::offsetCopy
+(
+    const scalarField& lst,
+    scalar * ptr,
+	label consDispl
+) const
+{
+       label size = lst.size();
+       label err = CHECK_CUDA_ERROR(
+                   cudaMemcpy(&ptr[consDispl], lst.cdata(), (size_t) size*sizeof(scalar), cudaMemcpyHostToDevice)
+               );
+       if (err != 0)
+       {
+           FatalErrorInFunction << "ERROR: cudaMemcpy returned " << err << abort(FatalError);
+       }
+}
+
 void Foam::cudaCsrMatrixExecutor::initializeSequence
 (
     const label len,

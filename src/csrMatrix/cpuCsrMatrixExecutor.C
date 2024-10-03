@@ -116,6 +116,16 @@ void Foam::cpuCsrMatrixExecutor::concatenate
     }
 }
 
+void Foam::cpuCsrMatrixExecutor::offsetCopy
+(
+    const scalarField& lst,
+    scalar * ptr,
+	label consDispl
+) const
+{
+	NotImplemented;
+}
+
 void Foam::cpuCsrMatrixExecutor::initializeSequence
 (
     const label len,

@@ -45,6 +45,7 @@ SourceFiles
 #include "scalar.H"
 #include "label.H"
 #include "List.H"
+#include "Field.H"
 
 namespace Foam
 {
@@ -83,6 +84,13 @@ public:
 
     template<class Type>
     void concatenate(label globSize, List<List<Type>> lst, Type * ptr) const;
+
+    void offsetCopy
+    (
+        const scalarField& lst,
+        scalar * ptr,
+	    label consDispl
+    ) const;
 
     void initializeSequence
     (

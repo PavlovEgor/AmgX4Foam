@@ -370,54 +370,112 @@ void Foam::csrMatrix::initializeValuesConsolidation
     scalar*& extValCons
 )
 {
-    List<List<scalar>> diagLst(gpuWorldSize_);
-    diagLst[myGpuWorldRank_] = diag;
-    Pstream::gatherList(diagLst, UPstream::msgType(), gpuWorld_);
-    
-    List<List<scalar>> upperLst(gpuWorldSize_);
-    upperLst[myGpuWorldRank_] = upper;
-    Pstream::gatherList(upperLst, UPstream::msgType(), gpuWorld_);
-
-    List<List<scalar>> lowerLst(gpuWorldSize_);
-    lowerLst[myGpuWorldRank_] = lower;
-    Pstream::gatherList(lowerLst, UPstream::msgType(), gpuWorld_);
-
-    List<List<scalar>> extValLst(gpuWorldSize_);
-    extValLst[myGpuWorldRank_] = extVal;
-    Pstream::gatherList(extValLst, UPstream::msgType(), gpuWorld_);
-
+    cudaIpcMemHandle_t diagConsHandle;
+    cudaIpcMemHandle_t upperConsHandle;
+    cudaIpcMemHandle_t lowerConsHandle;
+    cudaIpcMemHandle_t extConsHandle;
     if(gpuProc_)
     {
-        std::visit([this, &diagCons](const auto& exec)
-                    { diagCons = exec.template alloc<scalar>(this->nConsRows_); },
-                    csrMatExec_);
-        std::visit([this, &diagLst, &diagCons](const auto& exec)
-                    { exec.template concatenate<scalar>(this->nConsRows_, diagLst, diagCons); },
-                    csrMatExec_);
+        std::visit([this, &diagCons, &upperCons, &lowerCons, &extValCons](const auto& exec)
+        {
+                diagCons = exec.template alloc<scalar>(this->nConsRows_);
+                upperCons = exec.template alloc<scalar>(this->nConsIntFaces_);
+                lowerCons = exec.template alloc<scalar>(this->nConsIntFaces_);
+                extValCons = exec.template alloc<scalar>(this->nConsExtNz_);
+        }, this->csrMatExec_);
 
-        std::visit([this, &upperCons](const auto& exec)
-                    { upperCons = exec.template alloc<scalar>(this->nConsIntFaces_); },
-                    csrMatExec_);
-        std::visit([this, &upperLst, &upperCons](const auto& exec)
-                    { exec.template concatenate<scalar>(this->nConsIntFaces_, upperLst, upperCons); },
-                    csrMatExec_);
-
-        std::visit([this, &lowerCons](const auto& exec)
-                    { lowerCons = exec.template alloc<scalar>(this->nConsIntFaces_); },
-                    csrMatExec_);
-        std::visit([this, &lowerLst, &lowerCons](const auto& exec)
-                    { exec.template concatenate<scalar>(this->nConsIntFaces_, lowerLst, lowerCons); },
-                    csrMatExec_);
-
-        std::visit([this, &extValCons](const auto& exec)
-                    { extValCons = exec.template alloc<scalar>(this->nConsExtNz_); },
-                    csrMatExec_);
-        std::visit([this, &extValLst, &extValCons](const auto& exec)
-                    { exec.template concatenate<scalar>(this->nConsExtNz_, extValLst, extValCons); },
-                    csrMatExec_);
+        cudaIpcGetMemHandle(&diagConsHandle, diagCons);
+        cudaIpcGetMemHandle(&upperConsHandle, upperCons);
+        cudaIpcGetMemHandle(&lowerConsHandle, lowerCons);
+        cudaIpcGetMemHandle(&extConsHandle, extValCons);
     }
+
+    Pstream::broadcast((char*) &diagConsHandle, sizeof(cudaIpcMemHandle_t), gpuWorld_, Pstream::masterNo());
+    Pstream::broadcast((char*) &upperConsHandle, sizeof(cudaIpcMemHandle_t), gpuWorld_, Pstream::masterNo());
+    Pstream::broadcast((char*) &lowerConsHandle, sizeof(cudaIpcMemHandle_t), gpuWorld_, Pstream::masterNo());
+    Pstream::broadcast((char*) &extConsHandle, sizeof(cudaIpcMemHandle_t), gpuWorld_, Pstream::masterNo());
+
+    //List<List<scalar>> diagLst(gpuWorldSize_);
+    //diagLst[myGpuWorldRank_] = diag;
+    //Pstream::gatherList(diagLst, UPstream::msgType(), gpuWorld_);
+    
+    //List<List<scalar>> upperLst(gpuWorldSize_);
+    //upperLst[myGpuWorldRank_] = upper;
+    //Pstream::gatherList(upperLst, UPstream::msgType(), gpuWorld_);
+
+    //List<List<scalar>> lowerLst(gpuWorldSize_);
+    //lowerLst[myGpuWorldRank_] = lower;
+    //Pstream::gatherList(lowerLst, UPstream::msgType(), gpuWorld_);
+
+    //List<List<scalar>> extValLst(gpuWorldSize_);
+    //extValLst[myGpuWorldRank_] = extVal;
+    //Pstream::gatherList(extValLst, UPstream::msgType(), gpuWorld_);
+    label consDispl = 0;
+
+    if(!gpuProc_) cudaIpcOpenMemHandle((void**) &diagCons, diagConsHandle, cudaIpcMemLazyEnablePeerAccess );
+    consDispl = rowsConsDispPtr_->cdata()[myGpuWorldRank_];
+    std::visit([this, consDispl, &diagCons, diag](const auto& exec)
+                { exec.offsetCopy(diag, diagCons, consDispl); },
+                csrMatExec_);
+    if(!gpuProc_) cudaIpcCloseMemHandle(diagCons);
+
+    if(!gpuProc_) cudaIpcOpenMemHandle((void**) &upperCons, upperConsHandle, cudaIpcMemLazyEnablePeerAccess );
+    consDispl = intFacesConsDispPtr_->cdata()[myGpuWorldRank_];
+    std::visit([this, consDispl, &upperCons, upper](const auto& exec)
+                { exec.offsetCopy(upper, upperCons, consDispl); },
+                csrMatExec_);
+    if(!gpuProc_) cudaIpcCloseMemHandle(upperCons);
+
+    if(!gpuProc_) cudaIpcOpenMemHandle((void**) &lowerCons, lowerConsHandle, cudaIpcMemLazyEnablePeerAccess );
+    consDispl = intFacesConsDispPtr_->cdata()[myGpuWorldRank_];
+    std::visit([this, consDispl, &lowerCons, lower](const auto& exec)
+                { exec.offsetCopy(lower, lowerCons, consDispl); },
+                csrMatExec_);
+    if(!gpuProc_) cudaIpcCloseMemHandle(lowerCons);
+
+    if(!gpuProc_) cudaIpcOpenMemHandle((void**) &extValCons, extConsHandle, cudaIpcMemLazyEnablePeerAccess );
+    consDispl = extNzConsDispPtr_->cdata()[myGpuWorldRank_];
+    std::visit([this, consDispl, &extValCons, extVal](const auto& exec)
+                { exec.offsetCopy(extVal, extValCons, consDispl); },
+                csrMatExec_);
+    if(!gpuProc_) cudaIpcCloseMemHandle(extValCons);
+
+    //if(gpuProc_)
+    //{
+    //    std::visit([this, &diagCons](const auto& exec)
+    //                { diagCons = exec.template alloc<scalar>(this->nConsRows_); },
+    //                csrMatExec_);
+    //    std::visit([this, &diagLst, &diagCons](const auto& exec)
+    //                { exec.template concatenate<scalar>(this->nConsRows_, diagLst, diagCons); },
+    //                csrMatExec_);
+
+    //    std::visit([this, &upperCons](const auto& exec)
+    //                { upperCons = exec.template alloc<scalar>(this->nConsIntFaces_); },
+    //                csrMatExec_);
+    //    std::visit([this, &upperLst, &upperCons](const auto& exec)
+    //                { exec.template concatenate<scalar>(this->nConsIntFaces_, upperLst, upperCons); },
+    //                csrMatExec_);
+
+    //    std::visit([this, &lowerCons](const auto& exec)
+    //                { lowerCons = exec.template alloc<scalar>(this->nConsIntFaces_); },
+    //                csrMatExec_);
+    //    std::visit([this, &lowerLst, &lowerCons](const auto& exec)
+    //                { exec.template concatenate<scalar>(this->nConsIntFaces_, lowerLst, lowerCons); },
+    //                csrMatExec_);
+
+    //    std::visit([this, &extValCons](const auto& exec)
+    //                { extValCons = exec.template alloc<scalar>(this->nConsExtNz_); },
+    //                csrMatExec_);
+    //    std::visit([this, &extValLst, &extValCons](const auto& exec)
+    //                { exec.template concatenate<scalar>(this->nConsExtNz_, extValLst, extValCons); },
+    //                csrMatExec_);
+    //}
     
 
+    if (gpuProc_)
+    {
+        cudaDeviceSynchronize();
+    }
     Pstream::barrier(gpuWorld_);
 }
 
