@@ -447,7 +447,7 @@ void Foam::cudaCsrMatrixExecutor::concatenate
 
 void Foam::cudaCsrMatrixExecutor::offsetCopy
 (
-    const scalarField& lst,
+    const List<scalar>& lst,
     scalar * ptr,
 	label consDispl
 ) const

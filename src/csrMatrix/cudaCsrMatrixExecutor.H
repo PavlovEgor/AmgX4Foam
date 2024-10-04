@@ -45,7 +45,7 @@ SourceFiles
 
 #include "scalar.H"
 #include "List.H"
-#include "Field.H"
+#include "primitiveFieldsFwd.H"
 
 namespace Foam
 {
@@ -92,7 +92,7 @@ public:
 
     void offsetCopy
     (
-        const scalarField& lst,
+        const List<scalar>& lst,
         scalar * ptr,
 	    label consDispl
     ) const;
