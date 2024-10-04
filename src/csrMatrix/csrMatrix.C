@@ -619,15 +619,15 @@ void Foam::csrMatrix::computePermutation
     const label lowOffGlobal = globalNumbering.toGlobal(hostOwn.cdata()[0]) - hostOwn.cdata()[0];
     const label uppOffGlobal = globalNumbering.toGlobal(hostNeigh.cdata()[0]) - hostNeigh.cdata()[0];
 
-    labelList globalCells
-    (
+    labelField globalCells(globalNumbering.localSize());
+
+    globalCells = 
         identity
         (
             globalNumbering.localSize(),
             globalNumbering.localStart()
-        )
-    );
-
+        );
+     
     // Connections to neighbouring processors
     const label nReq = Pstream::nRequests(); //Operation useless if the mesh is steady
 
@@ -666,14 +666,8 @@ void Foam::csrMatrix::computePermutation
             const labelUList& faceCells = addr.patchAddr(patchi);
             const label len = faceCells.size();
 
-            labelList nbrCells
-            (
-                interfaces[patchi].internalFieldTransfer
-                (
-                    Pstream::commsTypes::nonBlocking,
-                    globalCells
-                )
-            );
+            labelField nbrCells = 
+                interfaces[patchi].internalFieldTransfer(Pstream::commsTypes::nonBlocking,globalCells);
 
             if (faceCells.size() != nbrCells.size())
             {
@@ -705,9 +699,9 @@ void Foam::csrMatrix::computePermutation
 
     if(consolidationStatus_ == ConsolidationStatus::necessary)
     {
-        consDiagOffGlob = new labelList(gpuWorldSize_);
-        consLowOffGlob = new labelList(gpuWorldSize_);
-        consUppOffGlob = new labelList(gpuWorldSize_);
+        consDiagOffGlob = new labelField(gpuWorldSize_);
+        consLowOffGlob = new labelField(gpuWorldSize_);
+        consUppOffGlob = new labelField(gpuWorldSize_);
         
         initializeConsolidation(nCells, nIntFaces, nnzExt, diagIndexGlobal, lowOffGlobal, uppOffGlobal,
                                 hostOwn, hostNeigh, foamExtRows, foamExtCols, totNnz,
@@ -1106,18 +1100,46 @@ void Foam::csrMatrix::applyPermutation
     {
         totNnz = nCells + 2*nIntFaces + nnzExt;
 
+        bool valid;
+        std::visit([&](const auto& exec){valid = exec.template isDeviceValid<scalar>(foamDiag.cdata());},csrMatExec_);
+        if (valid)
+        {
+            diag = foamDiag.cdata();
+        }else{
         std::visit([&foamDiag, &diag, nCells](const auto& exec)
                 { diag = exec.template copyFromFoam<scalar>(nCells, foamDiag.cdata()); },
                 csrMatExec_);
-        std::visit([&foamUpper, &upper, nIntFaces](const auto& exec)
-                { upper = exec.template copyFromFoam<scalar>(nIntFaces, foamUpper.cdata()); },
-                csrMatExec_);
-        std::visit([&foamLower, &lower, nIntFaces](const auto& exec)
-                { lower = exec.template copyFromFoam<scalar>(nIntFaces, foamLower.cdata()); },
-                csrMatExec_);
-        std::visit([&foamExtVals, &extVals, nnzExt](const auto& exec)
+        }
+        
+        std::visit([&](const auto& exec){valid = exec.template isDeviceValid(foamUpper.cdata());}, csrMatExec_);
+        if (valid)
+        {
+            upper = foamUpper.cdata();
+        }else{
+            std::visit([&foamUpper, &upper, nIntFaces](const auto& exec)
+                    { upper = exec.template copyFromFoam<scalar>(nIntFaces, foamUpper.cdata()); },
+                    csrMatExec_);
+        }
+        
+        std::visit([&](const auto& exec){valid = exec.template isDeviceValid(foamLower.cdata());}, csrMatExec_);
+        if (valid)
+        {
+            lower = foamLower.cdata();
+        }else{
+            std::visit([&foamLower, &lower, nIntFaces](const auto& exec)
+                    { lower = exec.template copyFromFoam<scalar>(nIntFaces, foamLower.cdata()); },
+                    csrMatExec_);
+        }
+
+        std::visit([&](const auto& exec){valid = exec.template isDeviceValid(foamExtVals.cdata());}, csrMatExec_);
+        if (valid)
+        {
+            extVals = foamExtVals.cdata();
+        }else{
+            std::visit([&foamExtVals, &extVals, nnzExt](const auto& exec)
                 { extVals = exec.template copyFromFoam<scalar>(nnzExt, foamExtVals.cdata()); },
                 csrMatExec_);
+        }
     }
 
     if(gpuProc_)
@@ -1191,14 +1213,18 @@ void Foam::csrMatrix::applyPermutation
         }
         else
         {
-            std::visit([diag](const auto& exec)
+            if (diag != foamDiag.cdata())
+                std::visit([diag](const auto& exec)
                         {exec.template clear<scalar>(diag); }, csrMatExec_);
-            std::visit([upper](const auto& exec)
+            if (upper != foamUpper.cdata())
+                std::visit([upper](const auto& exec)
                         {exec.template clear<scalar>(upper); }, csrMatExec_);
-            std::visit([lower](const auto& exec)
+            if (lower != foamLower.cdata())
+                std::visit([lower](const auto& exec)
                         {exec.template clear<scalar>(lower); }, csrMatExec_);
-            std::visit([extVals](const auto& exec)
-                        {exec.template clear<scalar>(extVals); }, csrMatExec_);
+            if ( extVals != foamExtVals.cdata())
+                std::visit([extVals](const auto& exec)
+                    {exec.template clear<scalar>(extVals); }, csrMatExec_);
         }
     }
 }
