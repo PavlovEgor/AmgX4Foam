@@ -473,6 +473,13 @@ void Foam::AmgXWrapper::updateOperator
 }
 
 
+/* \implements AmgXSolver::updateConfig */
+void Foam::AmgXWrapper::updateConfig(const string& newConfig)
+{
+    AMGX_config_add_parameters(&cfg, newConfig.c_str());
+}
+
+
 /* \implements AmgXWrapper::solve */
 void Foam::AmgXWrapper::solve
 (

@@ -159,6 +159,17 @@ Foam::solverPerformance Foam::AmgXSolver::solve
         amgx.updateOperator(&Amat);
     }
 
+    if(!controlDict_.dictName().ends_with("Final") && ctx.updated())
+    {
+        ctx.updateConfig(controlDict_);
+        ctx.updated() = false;
+    }
+    else if(controlDict_.dictName().ends_with("Final"))
+    {
+        ctx.updateConfig(controlDict_);
+        ctx.updated() = true;
+    }
+
     Amat.createConsVect(source, psi);
 
     amgx.solve(&Amat);

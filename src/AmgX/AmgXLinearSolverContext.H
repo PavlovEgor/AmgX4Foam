@@ -63,6 +63,7 @@ class AmgXLinearSolverContext
     // Private Data
 
     bool loaded_;
+    bool updated_;
 
     // Private member function
 
@@ -127,9 +128,12 @@ class AmgXLinearSolverContext
             {
                 dict = dict->findDict(subDictKey);
                 word newScope = dict->get<word>("scope");
-                word newSolver = dict->get<word>("solver");
-                if(scope != "") configStream << scope << ":" << subDictKey << "(" << newScope << ")=" << newSolver << ",";
-                else configStream << subDictKey << "(" << newScope << ")=" << newSolver << ",";
+                if(dict->found("solver"))
+                {
+                    word newSolver = dict->get<word>("solver");
+                    if(scope != "") configStream << scope << ":" << subDictKey << "(" << newScope << ")=" << newSolver << ",";
+                    else configStream << subDictKey << "(" << newScope << ")=" << newSolver << ",";
+                }
                 scope = newScope;
             }
 
@@ -166,6 +170,7 @@ public:
         :
             linearSolverContext(eqName, solverName),
             loaded_(false),
+            updated_(false),
 			Amat_(solverDict.get<word>("mode"))
         {
             int err = 0;
@@ -213,6 +218,7 @@ public:
         :
             linearSolverContext(eqName, solverName),
             loaded_(false),
+            updated_(false),
 			Amat_(solverDict.get<word>("mode"))
         {
             word mode = "dDDI";
@@ -255,9 +261,26 @@ public:
 
     // Member Functions
 
+        //- Update configuration
+        void updateConfig(const dictionary& solverDict)
+        {
+            string configStr = writeConfigurationString(solverDict.subDict("AmgXconfig"));
+            amgx_.updateConfig(configStr);
+        }
+
         bool loaded() const
         {
             return loaded_;
+        }
+
+        bool updated() const
+        {
+            return updated_;
+        }
+        
+        bool& updated()
+        {
+            return updated_;
         }
 };
 

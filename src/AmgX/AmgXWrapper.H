@@ -151,12 +151,22 @@ class AmgXWrapper
          * \param nLocalRows [in] The number of local rows on this rank.
          * \param nLocalNz [in] The total number of non zero entries locally.
          * \param matrix [in] CSR matrix.
-         *
-         * \return PetscErrorCode.
          */
         void updateOperator
         (
             const csrMatrix* matrix
+        );
+
+
+        /** \brief Re-sets up an existing AmgX config.
+         *
+         * Replaces the existing configuration.
+         *
+         * \param newConfig [in] 
+         */
+        void updateConfig
+        (
+            const string& newConfig
         );
 
 
