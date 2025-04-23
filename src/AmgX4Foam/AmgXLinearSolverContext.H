@@ -1,35 +1,32 @@
 /*---------------------------------------------------------------------------*\
-  =========                 |
-  \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox
-   \\    /   O peration     |
-    \\  /    A nd           | www.openfoam.com
-     \\/     M anipulation  |
 -------------------------------------------------------------------------------
-    Copyright (C) 2019 OpenCFD Ltd.
+    Copyright (C) 2025 CINECA
 -------------------------------------------------------------------------------
 License
-    This file is part of OpenFOAM.
+    This file is part of foamExternalSolvers.
 
-    OpenFOAM is free software: you can redistribute it and/or modify it
+    foamExternalSolvers is free software: you can redistribute it and/or modify it
     under the terms of the GNU General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
     (at your option) any later version.
 
-    OpenFOAM is distributed in the hope that it will be useful, but WITHOUT
+    foamExternalSolvers is distributed in the hope that it will be useful, but WITHOUT
     ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
-    FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+    FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License
     for more details.
 
     You should have received a copy of the GNU General Public License
-    along with OpenFOAM.  If not, see <http://www.gnu.org/licenses/>.
+    along with foamExternalSolvers. If not, see <http://www.gnu.org/licenses/>.
 
 Class
     Foam::AmgXLinearSolverContext
 
 Description
-    A struct containing a AmgX solver for each equation to be solved
+    A class containing an AmgX solver and a matrix (in a suitable format for AmgX) 
+    for each equation to be solved.
 
 SourceFiles
+    AmgXLinearSolverContext.H
     AmgXLinearSolverContext.C
 
 \*---------------------------------------------------------------------------*/
@@ -152,7 +149,11 @@ public:
     //- Public Members
 
         AmgXWrapper amgx_;
-        matrix Amat_;
+        
+	matrix Amat_;
+        
+	//- Flag to cache the matrix coefficients
+	bool updateMatrixCoefficients_;
 
         static const word packageName;
 
@@ -171,7 +172,8 @@ public:
             linearSolverContext(eqName, solverName),
             loaded_(false),
             updated_(false),
-			Amat_(solverDict.get<word>("mode"))
+	    updateMatrixCoefficients_(solverDict.getOrDefault<bool>("updateMatrixCoefficients", true)),
+            Amat_(solverDict.get<word>("mode"))
         {
             int err = 0;
 
@@ -219,7 +221,8 @@ public:
             linearSolverContext(eqName, solverName),
             loaded_(false),
             updated_(false),
-			Amat_(solverDict.get<word>("mode"))
+            updateMatrixCoefficients_(solverDict.getOrDefault<bool>("updateMatrixCoefficients", true)),
+	    Amat_(solverDict.get<word>("mode"))
         {
             word mode = "dDDI";
             //word mode = solverDict.get<word>("mode");
@@ -282,6 +285,11 @@ public:
         {
             return updated_;
         }
+
+	bool doUpdateMatrixCoefficients() const
+	{
+            return updateMatrixCoefficients_;
+	}
 };
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //

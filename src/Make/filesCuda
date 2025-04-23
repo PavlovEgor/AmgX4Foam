@@ -1,2 +1,2 @@
-global.cu
+utility/global.cu
 csrMatrix/cudaCsrMatrixExecutor.cu

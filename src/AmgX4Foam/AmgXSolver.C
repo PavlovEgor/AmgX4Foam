@@ -1,29 +1,24 @@
 /*---------------------------------------------------------------------------*\
-  =========                 |
-  \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox
-   \\    /   O peration     |
-    \\  /    A nd           | www.openfoam.com
-     \\/     M anipulation  |
 -------------------------------------------------------------------------------
     Copyright (C) 2011-2017 OpenFOAM Foundation
     Copyright (C) 2016-2022 OpenCFD Ltd.
-    Copyright (C) 2022-2023 Cineca
+    Copyright (C) 2025 CINECA
 -------------------------------------------------------------------------------
 License
-    This file is part of OpenFOAM.
+    This file is part of foamExternalSolvers.
 
-    OpenFOAM is free software: you can redistribute it and/or modify it
+    foamExternalSolvers is free software: you can redistribute it and/or modify it
     under the terms of the GNU General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
     (at your option) any later version.
 
-    OpenFOAM is distributed in the hope that it will be useful, but WITHOUT
+    foamExternalSolvers is distributed in the hope that it will be useful, but WITHOUT
     ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
-    FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+    FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License
     for more details.
 
     You should have received a copy of the GNU General Public License
-    along with OpenFOAM.  If not, see <http://www.gnu.org/licenses/>.
+    along with foamExternalSolvers. If not, see <http://www.gnu.org/licenses/>.
 
 \*---------------------------------------------------------------------------*/
 
@@ -106,45 +101,30 @@ Foam::solverPerformance Foam::AmgXSolver::solve
 
     label nGlobalCells;
 
-    if(!Pstream::parRun())
+    if (!Pstream::parRun())
     {
         nGlobalCells = nCells;
-        Amat.applyPermutation(matrix_);
+	if (!ctx.initialized() || ctx.doUpdateMatrixCoefficients())
+	{
+	    Info << "Update coefficients" << nl;
+            Amat.applyPermutation(matrix_);
+	}
     }
     else
     {
-        if(!ctx.initialized()) amgx.initialiseMatrixComms(&Amat);
-        Amat.applyPermutation(matrix_, interfaceBouCoeffs_, nGlobalCells);
+        if (!ctx.initialized()) 
+	{
+            amgx.initialiseMatrixComms(&Amat);
+	}
+
+	if (!ctx.initialized() || ctx.doUpdateMatrixCoefficients())
+        {
+            Info << "Update coefficients" << nl;
+            Amat.applyPermutation(matrix_, interfaceBouCoeffs_, nGlobalCells);
+	}
     }
 
-    // label nnz = Amat.nLocalNz();
-
-    //- Print matrix converted to check
-    /*label * hostOwnStrt = new label[Amat.nOwnerStart()];
-    cudaMemcpy(hostOwnStrt, Amat.ownerStart(), Amat.nOwnerStart()*sizeof(label), cudaMemcpyDeviceToHost);
-    string fileName = "ownStart-escape" + std::to_string(Pstream::myProcNo());
-    std::ofstream outFile1(fileName); //, std::ios_base::app);
-    outFile1 << "ownerStart:" << nl;
-    for(int i=0; i< Amat.nOwnerStart(); ++i) outFile1 << hostOwnStrt[i] << nl;
-    outFile1.close();
-
-    label * hostColIndices = new label[nnz];
-    cudaMemcpy(hostColIndices, Amat.colIndices(), nnz*sizeof(label), cudaMemcpyDeviceToHost);
-    fileName = "colIndices-escape" + std::to_string(Pstream::myProcNo());
-    std::ofstream outFile2(fileName);
-    outFile2 << "colIndeces:" << nl;
-    for(int i=0; i< nnz; ++i) outFile2 << hostColIndices[i] << nl;
-    outFile2.close();
-
-    scalar * hostValues = new scalar[nnz];
-    cudaMemcpy(hostValues, Amat.values(), nnz*sizeof(scalar), cudaMemcpyDeviceToHost);
-    fileName = "values-escape" + std::to_string(Pstream::myProcNo());
-    std::ofstream outFile3(fileName);
-    outFile3 << "values:" << nl;
-    for(int i=0; i< nnz; ++i) outFile3 << hostValues[i] << nl;
-    outFile3.close();*/
-
-    if(!ctx.initialized())
+    if (!ctx.initialized())
     {
         Info<< "Initializing AmgX Linear Solver " << eqName_ << nl;
 
@@ -156,7 +136,11 @@ Foam::solverPerformance Foam::AmgXSolver::solve
     }
     else
     {
-        amgx.updateOperator(&Amat);
+        if (ctx.doUpdateMatrixCoefficients())	
+        {
+            Info << "Update operator" << nl;
+            amgx.updateOperator(&Amat);
+        }
     }
 
     if(!controlDict_.dictName().ends_with("Final") && ctx.updated())
@@ -190,9 +174,5 @@ Foam::solverPerformance Foam::AmgXSolver::solve
 
     return ctx.performance_;
 }
-
-// * * * * * * * * * * * * * Explicit instantiations  * * * * * * * * * * * //
-
-
 
 // ************************************************************************* //
