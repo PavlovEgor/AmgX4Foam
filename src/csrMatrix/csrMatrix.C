@@ -38,7 +38,9 @@ Foam::csrMatrix::csrMatrix(word mode)
     valuesPtr_(nullptr),
     rowsConsDispPtr_(nullptr),
     intFacesConsDispPtr_(nullptr),
-    extNzConsDispPtr_(nullptr)
+    extNzConsDispPtr_(nullptr),
+    psiCons_(nullptr),
+    rhsCons_(nullptr)
 {
     if (mode.starts_with("h"))
     {
@@ -96,9 +98,6 @@ Foam::csrMatrix::csrMatrix(word mode)
 
 void Foam::csrMatrix::finalize()
 {
-    // NOTA: Implementare controllo con buleano o invalidazione del puntatore
-    //       per gestire bene la finalizzazione
-    
     if (hasPermutation_)
     {
         clearAddressing();
@@ -106,14 +105,12 @@ void Foam::csrMatrix::finalize()
 
     if (ldu2csrPerm_)
     {
-        //delete ldu2csrPerm_;
         std::visit([this](const auto& exec)
                {exec.template clear<label>(this->ldu2csrPerm_); }, csrMatExec_);
     }
 
     if (valuesPtr_)
     {
-        // delete valuesPtr_;
         std::visit([this](const auto& exec)
                 {exec.template clear<scalar>(this->valuesPtr_); }, csrMatExec_);
     }
@@ -133,14 +130,19 @@ void Foam::csrMatrix::finalize()
         delete extNzConsDispPtr_;
     }
 
-    if(psiCons_)
+    if(isConsolidated())
     {
-        cudaFree(psiCons_);
-    }
+        if(psiCons_)
+        {
+	    std::visit([this](const auto& exec)
+                {exec.template clear<scalar>(this->psiCons_); }, csrMatExec_);
+        }
 
-    if(rhsCons_)
-    {
-        cudaFree(rhsCons_);
+        if(rhsCons_)
+        {
+	    std::visit([this](const auto& exec)
+                {exec.template clear<scalar>(this->rhsCons_); }, csrMatExec_);
+        }
     }
 }
 
