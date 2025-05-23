@@ -106,7 +106,6 @@ Foam::solverPerformance Foam::AmgXSolver::solve
         nGlobalCells = nCells;
 	if (!ctx.initialized() || ctx.doUpdateMatrixCoefficients())
 	{
-	    Info << "Update coefficients" << nl;
             Amat.applyPermutation(matrix_);
 	}
     }
@@ -119,14 +118,13 @@ Foam::solverPerformance Foam::AmgXSolver::solve
 
 	if (!ctx.initialized() || ctx.doUpdateMatrixCoefficients())
         {
-            Info << "Update coefficients" << nl;
             Amat.applyPermutation(matrix_, interfaceBouCoeffs_, nGlobalCells);
 	}
     }
 
     if (!ctx.initialized())
     {
-        Info<< "Initializing AmgX Linear Solver " << eqName_ << nl;
+        Info << "Initializing AmgX Linear Solver " << eqName_ << nl;
 
         amgx.setOperator(nGlobalCells, &Amat);
 
@@ -138,7 +136,6 @@ Foam::solverPerformance Foam::AmgXSolver::solve
     {
         if (ctx.doUpdateMatrixCoefficients())	
         {
-            Info << "Update operator" << nl;
             amgx.updateOperator(&Amat);
         }
     }
