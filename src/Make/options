@@ -18,3 +18,4 @@ CC += -cuda
 
 WMAKE_LOCAL=$(MAKE_DIR)/../../wmake
 include $(WMAKE_LOCAL)/c++
+
