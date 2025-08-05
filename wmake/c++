@@ -10,8 +10,8 @@ c++FLAGS += -std=c++17 -O3
 ifneq (,$(findstring true,$(have_cuda)))
     c++FLAGS += -Dhave_cuda
     CC += -gpu=cc$(NVARCH) -cuda
-    LINKEXE += -lcudart -lcusparse
-    LINKLIBSO += -lcudart -lcublas -shared -Xlinker --add-needed
+    LINKEXE += -lcudart
+    LINKLIBSO += -lcudart -shared -Xlinker --add-needed
     include $(WMAKE_LOCAL)/cuda
 
 endif
