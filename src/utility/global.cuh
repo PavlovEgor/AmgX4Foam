@@ -23,7 +23,6 @@ License
 #include <iostream>
 #include <cuda.h>
 #include <cuda_runtime_api.h>
-#include <cusparse.h>
 
 #ifndef CUDA_GLOBAL
 #define CUDA_GLOBAL
@@ -53,22 +52,6 @@ namespace cudaKernels
     void printDeviceDouble(const double* value, int length);
     void printDeviceInteger(const int* value, int length);
 }
-
-template<typename T>
-int checkCusparse(T f, const char* const func, const char* const file, const int line)
-{
-    const cusparseStatus_t __s = f;
-
-    if(__s != CUSPARSE_STATUS_SUCCESS)
-    {
-        std::cerr << "CUDA status in: " << f << " [" << __FILE__ << ","
-            << __LINE__ << "], " << std::endl;
-        exit(1);
-    }
-    return static_cast<int>(__s);
-}
-
-#define CHECK_CUSPARSE(val) checkCusparse((val), #val, __FILE__, __LINE__)
 
 #endif
 
