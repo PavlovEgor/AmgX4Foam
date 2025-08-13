@@ -398,19 +398,19 @@ public:
             }
 
         //- Access to coefficients
-            const scalar* values() const;
+            virtual const scalar* values() const;
 
             bool hasValues() const noexcept
             {
                 return (valuesPtr_);
             }
 
-            const scalar* rhsCons() const
+            virtual const scalar* rhsCons() const
             {
                 return rhsCons_;
             }
 
-            scalar* psiCons() const
+            virtual scalar* psiCons() const
             {
                 return psiCons_;
             }
