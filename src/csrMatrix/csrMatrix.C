@@ -36,6 +36,7 @@ Foam::csrMatrix::csrMatrix(word mode)
     colIndicesPtr_(nullptr),
     ldu2csrPerm_(nullptr),
     valuesPtr_(nullptr),
+    valuesTmpPtr_(nullptr),
     rowsConsDispPtr_(nullptr),
     intFacesConsDispPtr_(nullptr),
     extNzConsDispPtr_(nullptr),
@@ -113,6 +114,12 @@ void Foam::csrMatrix::finalize()
     {
         std::visit([this](const auto& exec)
                 {exec.template clear<scalar>(this->valuesPtr_); }, csrMatExec_);
+    }
+
+    if (valuesTmpPtr_)
+    {
+        std::visit([this](const auto& exec)
+                {exec.template clear<scalar>(this->valuesTmpPtr_); }, csrMatExec_);
     }
 
     if (rowsConsDispPtr_)
@@ -977,11 +984,12 @@ void Foam::csrMatrix::applyPermutation(const lduMatrix& lduMatrix)
     }
 
     // Initialize valuesTmp = [(diag), (upper), (lower)]
-    // scalarField valuesTmp(totNnz);
-    scalar* valuesTmp = nullptr;
-    std::visit([&valuesTmp, totNnz](const auto& exec)
-               { valuesTmp = exec.template alloc<scalar>(totNnz); },
+    if(!valuesTmpPtr_)
+    {
+        std::visit([this, totNnz](const auto& exec)
+               { this->valuesTmpPtr_ = exec.template alloc<scalar>(totNnz); },
                csrMatExec_);
+    }
 
     initializeValue
     (
@@ -990,7 +998,7 @@ void Foam::csrMatrix::applyPermutation(const lduMatrix& lduMatrix)
         diag,
         upper,
         lower,
-        valuesTmp
+        valuesTmpPtr_
     );
 
     // Apply permutation
@@ -998,7 +1006,7 @@ void Foam::csrMatrix::applyPermutation(const lduMatrix& lduMatrix)
     (
         totNnz,
         ldu2csrPerm_,
-        valuesTmp,
+        valuesTmpPtr_,
         valuesPtr_
     );
 
@@ -1011,9 +1019,6 @@ void Foam::csrMatrix::applyPermutation(const lduMatrix& lduMatrix)
     if (lower != foamLower)
         std::visit([lower](const auto& exec)
                 {exec.template clear<scalar>(lower); }, csrMatExec_);
-
-    std::visit([valuesTmp](const auto& exec)
-                {exec.template clear<scalar>(valuesTmp); }, csrMatExec_);
 }
 
 
@@ -1142,19 +1147,19 @@ void Foam::csrMatrix::applyPermutation
     {
         if(!valuesPtr_)
         {
-            // valuesPtr_ = new scalarField(totNnz);
             std::visit([this, totNnz](const auto& exec)
                         { this->valuesPtr_ = exec.template alloc<scalar>(totNnz); },
                         csrMatExec_);
         }
 
         // Initialize valuesTmp = [(diag), (upper), (lower), (extValues)]
-        // scalarField valuesTmp(totNnz);
-        scalar* valuesTmp = nullptr;
-        std::visit([&valuesTmp, totNnz](const auto& exec)
-                   { valuesTmp = exec.template alloc<scalar>(totNnz); },
-                    csrMatExec_);
-
+        if(!valuesTmpPtr_)
+        {
+            std::visit([this, totNnz](const auto& exec)
+                        { this->valuesTmpPtr_ = exec.template alloc<scalar>(totNnz); },
+                        csrMatExec_);
+        }
+	
         if(consolidationStatus_ == ConsolidationStatus::initialized)
         {
             initializeValueExt
@@ -1166,7 +1171,7 @@ void Foam::csrMatrix::applyPermutation
                 upperCons,
                 lowerCons,
                 extValsCons,
-                valuesTmp
+                valuesTmpPtr_
             );
         }
         else
@@ -1180,7 +1185,7 @@ void Foam::csrMatrix::applyPermutation
                 upper,
                 lower,
                 extVals,
-                valuesTmp
+                valuesTmpPtr_
             );   
         }
         
@@ -1189,12 +1194,9 @@ void Foam::csrMatrix::applyPermutation
         (
             totNnz,
             ldu2csrPerm_,
-            valuesTmp,
+            valuesTmpPtr_,
             valuesPtr_
         );
-
-        std::visit([valuesTmp](const auto& exec)
-                        {exec.template clear<scalar>(valuesTmp); }, csrMatExec_);
         
         if(consolidationStatus_ == ConsolidationStatus::initialized)
         {

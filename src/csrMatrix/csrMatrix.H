@@ -108,6 +108,9 @@ protected:
         //- Coefficients
         scalar* valuesPtr_;
 
+        //- Temporary coefficients
+        scalar* valuesTmpPtr_;
+
         //- Consolidated variable array
         scalar* psiCons_;
 
