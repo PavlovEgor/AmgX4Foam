@@ -445,8 +445,7 @@ public:
             void applyPermutation
             (
                 const lduMatrix& lduMatrix,
-                const FieldField<Field, scalar> interfaceBouCoeffs,
-                      label& nGlobalCells
+                const FieldField<Field, scalar> interfaceBouCoeffs
             );
 
             //- Allocate consolidated variable and source vector

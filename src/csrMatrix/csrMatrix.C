@@ -1026,8 +1026,7 @@ void Foam::csrMatrix::applyPermutation(const lduMatrix& lduMatrix)
 void Foam::csrMatrix::applyPermutation
 (
     const lduMatrix& lduMatrix,
-    const FieldField<Field, scalar> interfaceBouCoeffs,
-          label& nGlobalCells
+    const FieldField<Field, scalar> interfaceBouCoeffs
 )
 {
     label nnzExt = 0;
@@ -1077,9 +1076,6 @@ void Foam::csrMatrix::applyPermutation
     label nIntFaces = lduMatrix.upper().size();
     label nCells = lduMatrix.diag().size();
     label totNnz;
-
-    //- Compute global number of equations
-    nGlobalCells = returnReduce(nCells, sumOp<label>());
 
     const scalar * diag = nullptr;
     const scalar * upper = nullptr;

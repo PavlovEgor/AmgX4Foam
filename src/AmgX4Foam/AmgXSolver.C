@@ -99,11 +99,8 @@ Foam::solverPerformance Foam::AmgXSolver::solve
     
     csrMatrix& Amat = ctx.Amat_;
 
-    label nGlobalCells;
-
     if (!Pstream::parRun())
     {
-        nGlobalCells = nCells;
 	if (!ctx.initialized() || ctx.doUpdateMatrixCoefficients())
 	{
             Amat.applyPermutation(matrix_);
@@ -118,13 +115,16 @@ Foam::solverPerformance Foam::AmgXSolver::solve
 
 	if (!ctx.initialized() || ctx.doUpdateMatrixCoefficients())
         {
-            Amat.applyPermutation(matrix_, interfaceBouCoeffs_, nGlobalCells);
+            Amat.applyPermutation(matrix_, interfaceBouCoeffs_);
 	}
     }
 
     if (!ctx.initialized())
     {
         Info << "Initializing AmgX Linear Solver " << eqName_ << nl;
+
+        //- Compute global number of equations
+        const label nGlobalCells = returnReduce(nCells, sumOp<label>());
 
         amgx.setOperator(nGlobalCells, &Amat);
 
