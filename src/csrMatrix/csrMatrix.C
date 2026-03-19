@@ -26,6 +26,9 @@ License
 
 #include "globalIndex.H"
 
+#ifndef have_cuda
+#define have_cuda
+#endif
 // * * * * * * * * * * * * * * Static Data Members * * * * * * * * * * * * * //
 
 // * * * * * * * * * * * * * * * Constructors * * * * * * * * * * * * * * * //

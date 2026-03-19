@@ -4,10 +4,10 @@
 SUFFIXES   += .cu
 
 ifeq (,$(strip $(NVARCH)))
-    NVARCH := 80
+    NVARCH := 75
 endif
 
-NVCC      := nvcc$(COMPILER_VERSION) -std=c++17 --compiler-options '-fPIC'
+NVCC      := $(HOME)/cuda-13.1/bin/nvcc -std=c++17 --compiler-options='-fPIC'
 
 cuARCH    :=  -m64 -arch=sm_$(NVARCH)
 cuDBUG    :=

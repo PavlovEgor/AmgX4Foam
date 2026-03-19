@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 # Help message
 printHelp()
@@ -14,26 +14,26 @@ printHelp()
     echo "  -jN      | -j N | -j       : Compile using all or specified N"
     echo "                               cores / hyperthreads"
     echo ""
-};
+}
 
 # Create files list
 createFileList()
 {
     cd Make
-    if [[ "${have_cuda}" == "true" ]]; then :
+    if [ "${have_cuda}" = "true" ]; then
         cat filesCuda filesIn > files
     else
         cat filesIn > files
     fi
     cd ..
-};
+}
 
 #------------------------------------------------------------------------------
 # Initialize variables
 #------------------------------------------------------------------------------
 
 # Nvidia GPU compute capacity
-export NVARCH=80
+export NVARCH=75
 
 # Default options
 export have_cuda=false
@@ -61,17 +61,16 @@ do
             export have_cuda=true
             case "$2" in
             [0-9]*)
-                if [[ "$2" -ge 5 ]] && [[ "$2" -le 9 ]]; then :
+                if [ "$2" -ge 5 ] && [ "$2" -le 9 ]; then
                     export NVARCH="${2}0"
                     shift
-                elif [[ "$2" -ge 50 ]] && [[ "$2" -le 90 ]]; then :
+                elif [ "$2" -ge 50 ] && [ "$2" -le 90 ]; then
                     export NVARCH="${2}"
                     shift
                 fi
                 ;;
             esac
             ;;
-
 
         # Clean all subdirectories
         -cl | -clean*)
@@ -106,26 +105,25 @@ do
     shift
 done
 
-if [[ ! -z ${WM_NCOMPPROCS} ]]; then :
+if [ -n "${WM_NCOMPPROCS}" ]; then
     WM_ARGUMENTS+=" -j"
-    if [[ ! "${WM_NCOMPPROCS}" == "0" ]]; then :
+    if [ "${WM_NCOMPPROCS}" != "0" ]; then
         WM_ARGUMENTS+=" ${WM_NCOMPPROCS}"
     fi
 fi
-
 
 #------------------------------------------------------------------------------
 # Clean installation
 #------------------------------------------------------------------------------
 
-if [[ ${LAUNCH_WCLEAN} == "true" ]]; then :
+if [ "${LAUNCH_WCLEAN}" = "true" ]; then
 
     # Clean zeptoFOAM library
     cd src
         wclean
         rm -rf lnInclude
         rm -rf ${FOAM_USER_LIBBIN}/libEscapeFromFoam.so
-        if [[ -f Make/files ]]; then :
+        if [ -f Make/files ]; then
             rm Make/files
         fi
     cd ..
@@ -133,7 +131,6 @@ if [[ ${LAUNCH_WCLEAN} == "true" ]]; then :
     # Exit script without compiling
     exit
 fi
-
 
 #------------------------------------------------------------------------------
 # Launch installation
@@ -146,5 +143,4 @@ cd src
 createFileList
 wmake ${WM_ARGUMENTS} $targetType
 cd ..
-
 #------------------------------------------------------------------------------

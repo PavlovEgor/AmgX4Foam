@@ -228,7 +228,14 @@ public:
             //word mode = solverDict.get<word>("mode");
             word dataLocation =solverDict.get<word>("dataLocation");
 
-            string configStr = writeConfigurationString(solverDict.subDict("AmgXconfig"));
+            string configStr;
+            if (solverDict.found("AmgXconfig")){
+                configStr = writeConfigurationString(solverDict.subDict("AmgXconfig"));
+            } else{
+                fileName configFile = solverDict.get<fileName>("AmgXconfigPath");
+                configFile.expand();
+                configStr = string(configFile);
+            }
 
             if(!Pstream::parRun())
             {

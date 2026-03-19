@@ -4,6 +4,7 @@ EXE_INC = \
     -I$(FOAM_SRC)/Pstream/mpi \
     -I. \
     -I$(AMGX_INC) \
+    -I$(HOME)/openmpi-4.1.8/build/include \
     -IcsrMatrix \
     -Iutility \
     -IAmgX
@@ -12,9 +13,10 @@ LIB_LIBS = \
     -lfiniteVolume \
     -lmeshTools \
     -L$(AMGX_LIB) -lamgxsh -fopenmp \
-    -L$(FOAM_USER_LIBBIN)
+    -L$(FOAM_USER_LIBBIN) \
+    -L$(HOME)/cuda-13.1/lib64 -lcudart -lcuda -lcusparse -lcublas
 
-CC += -cuda
+CC += -I$(HOME)/cuda-13.1/include  -I$(HOME)/cuda-13.1/targets/x86_64-linux/include -I$(HOME)/cuda-13.1/include/crt
 
 WMAKE_LOCAL=$(MAKE_DIR)/../../wmake
 include $(WMAKE_LOCAL)/c++

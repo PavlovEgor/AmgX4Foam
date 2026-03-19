@@ -39,6 +39,7 @@ SourceFiles
 #include "scalar.H"
 #include "lduMatrix.H"
 #include "csrMatrixExecutor.H"
+#include <cuda_runtime_api.h>
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
