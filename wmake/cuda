@@ -7,7 +7,7 @@ ifeq (,$(strip $(NVARCH)))
     NVARCH := 75
 endif
 
-NVCC      := $(HOME)/cuda-13.1/bin/nvcc -std=c++17 --compiler-options='-fPIC'
+NVCC      := $(CUDA_DIR)/bin/nvcc -std=c++17 --compiler-options='-fPIC'
 
 cuARCH    :=  -m64 -arch=sm_$(NVARCH)
 cuDBUG    :=
