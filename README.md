@@ -22,17 +22,17 @@ export LD_LIBRARY_PATH=$AMGX_DIR/build:$LD_LIBRARY_PATH
 
 ## Installing AmgX4Foam
 
-As I understand it, it is recommended to build it in a special folder $WM_PROJECT_DIR/modules.  Clone the AmgX4Foam module from the repository:
+As I understand it, it is recommended to build it in a special folder `$WM_PROJECT_DIR/modules`.  Clone the AmgX4Foam module from the repository:
 
 ```
 git clone https://github.com/PavlovEgor/AmgX4Foam.git
 ```
 
-(origin: https://gitlab.hpc.cineca.it/exafoam/foamExternalSolvers). There is an Allwmake that needs to be run with the -cu flag, and the flag values can be viewed inside the script. It is possible that it will not build the first time, so you will need to check in /wmake and /src/Make that all the dependencies and libraries are specified.
+(origin: https://gitlab.hpc.cineca.it/exafoam/foamExternalSolvers). There is an `Allwmake` that needs to be run with the `-cu` flag, and the flag values can be viewed inside the script. It is possible that it will not build the first time, so you will need to check in `/wmake` and `/src/Make` that all the dependencies and libraries are specified.
 
 ## Using in a case
 
-After building, the module will be compiled in $FOAM_USER_LIBBIN, and it can be connected to the calculation in the standard way in controlDict:
+After building, the module will be compiled in `$FOAM_USER_LIBBIN`, and it can be connected to the calculation in the standard way in `controlDict`:
 
 ```libs (AmgX4Foam);```
 
@@ -55,7 +55,7 @@ p
             solver              FGMRES;
             max_iters           100;
             tolerance           1e-6;
-            norm                L2;
+            norm                L1_SCALED;
             convergence         RELATIVE_INI;
             monitor_residual    1;        
             // print_solve_stats   1;
@@ -106,15 +106,15 @@ If the library was successfully compiled, then OpenFOAM should see the new AmgX 
             "postsweeps": 1
         }, 
         "solver": "FGMRES", 
-        "print_solve_stats": 1, 
-        "obtain_timings": 1, 
+        "print_solve_stats": 0, 
+        "obtain_timings": 0, 
         "max_iters": 100, 
         "monitor_residual": 1, 
         "gmres_n_restart": 20, 
         "convergence": "RELATIVE_INI", 
         "scope": "main", 
         "tolerance" : 1e-06, 
-        "norm": "L2"
+        "norm": "L1_SCALED"
     }
 }
 ```
@@ -129,6 +129,14 @@ p
     AmgXconfigPath    "$WM_PROJECT_USER_DIR/run/openFoamTests/tubeTests/case/system/FGMRES_CLASSICAL_AGGRESSIVE_PMIS.json";
 }
 ```
+
+### Important notes
+
+- Be sure to use `"store_res_history": 1` at the `solver` level. OpenFOAM uses both the initial and final residuals (the initial one for convergence criteria, and the final one is just printed).
+
+- For the OpenFOAM calculation to match the equivalent one in AmgX, the same norms must be used; otherwise, the convergence criteria may not work correctly. To do this, set `"norm": "L1_SCALED"`.
+
+- If you are using configurations from AmgX, make sure that `print_solve_stats`, `obtain_timings`, and other keys responsible for logging any data are disabled; otherwise, the log will quickly become cluttered.
 
 ## Project Dependencies
 
