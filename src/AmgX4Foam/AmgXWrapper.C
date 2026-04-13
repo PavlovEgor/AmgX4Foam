@@ -185,7 +185,7 @@ void Foam::AmgXWrapper::initComms(const int &commId)
     myGlobalWorldRank_ = Pstream::myProcNo(commId);
 
     //- Get the communicator for processors on the same node (local world)
-    localWorld_ = Pstream::commLocalNode();
+    localWorld_ = Pstream::allocateIntraHostCommunicator(globalWorld_);
 
     //- Get size and rank for local communicator
     localWorldSize_ = Pstream::nProcs(localWorld_);
@@ -237,7 +237,7 @@ void Foam::AmgXWrapper::initComms(const int &commId)
     for(label i=0; i<globalWorldSize_; ++i){
         if(gpuProcList[i]) globalGpuWolrdProcs.append(i);
     }
-    globalGpuWorld_ = Pstream::newCommunicator(globalWorld_, globalGpuWolrdProcs);
+    globalGpuWorld_ = Pstream::allocateCommunicator(globalWorld_, globalGpuWolrdProcs);
 
     //- Get size and rank for the communicator corresponding to gpuWorld
     if (gpuProc_)
@@ -255,7 +255,7 @@ void Foam::AmgXWrapper::initComms(const int &commId)
     {
         if(devIds[i] == devID_) gpuWorldProcs.append(i);
     }
-    gpuWorld_ = Pstream::newCommunicator(localWorld_, gpuWorldProcs);
+    gpuWorld_ = Pstream::allocateCommunicator(localWorld_, gpuWorldProcs);
 
     //- Get size and rank for the communicator corresponding to myWorld
     gpuWorldSize_ = Pstream::nProcs(gpuWorld_);
