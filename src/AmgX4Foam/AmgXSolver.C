@@ -81,16 +81,6 @@ Foam::solverPerformance Foam::AmgXSolver::scalarSolve
     const direction cmpt
 ) const
 {   
-    bool     matUpdate = true;
-    bool     pcUpdate  = true;
-    MPI_Comm comm;
-
-    if (PstreamGlobals::MPICommunicators_.empty()) {
-        comm = MPI_COMM_NULL; // set to this special value so that petsc can be properly initialized (with PETSC_COMM_WORLD set to be MPI_COMM_WORLD).
-    } else {
-        comm = PstreamGlobals::MPICommunicators_[matrix_.mesh().comm()];
-    }
-
     const fvMesh& fvm = dynamicCast<const fvMesh>(this->matrix_.mesh().thisDb());
     const linearSolverContextTable<AmgXLinearSolverContext<csrMatrix>>& contexts =
         linearSolverContextTable<AmgXLinearSolverContext<csrMatrix>>::New(fvm);
