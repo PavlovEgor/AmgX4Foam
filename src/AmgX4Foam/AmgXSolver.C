@@ -29,6 +29,7 @@ License
 #include "csrMatrix.H"
 
 #include "globalIndex.H"
+#include "PrecisionAdaptor.H"
 
 // #include <iostream>
 // #include <fstream>
@@ -73,20 +74,26 @@ Foam::AmgXSolver::AmgXSolver
 
 // * * * * * * * * * * * * * * * Member Functions  * * * * * * * * * * * * * //
 
-Foam::solverPerformance Foam::AmgXSolver::solve
+Foam::solverPerformance Foam::AmgXSolver::scalarSolve
 (
     solveScalarField& psi,
     const scalarField& source,
     const direction cmpt
 ) const
 {   
-    const fvMesh& fvm = dynamicCast<const fvMesh>(this->matrix_.mesh().thisDb());
-    
-    label nCells = psi.size();
+    bool     matUpdate = true;
+    bool     pcUpdate  = true;
+    MPI_Comm comm;
 
+    if (PstreamGlobals::MPICommunicators_.empty()) {
+        comm = MPI_COMM_NULL; // set to this special value so that petsc can be properly initialized (with PETSC_COMM_WORLD set to be MPI_COMM_WORLD).
+    } else {
+        comm = PstreamGlobals::MPICommunicators_[matrix_.mesh().comm()];
+    }
+
+    const fvMesh& fvm = dynamicCast<const fvMesh>(this->matrix_.mesh().thisDb());
     const linearSolverContextTable<AmgXLinearSolverContext<csrMatrix>>& contexts =
         linearSolverContextTable<AmgXLinearSolverContext<csrMatrix>>::New(fvm);
-
     AmgXLinearSolverContext<csrMatrix>& ctx = contexts.getContext(eqName_, typeName);
 
     if (!ctx.loaded())
@@ -101,22 +108,21 @@ Foam::solverPerformance Foam::AmgXSolver::solve
 
     if (!Pstream::parRun())
     {
-	if (!ctx.initialized() || ctx.doUpdateMatrixCoefficients())
-	{
+        if (!ctx.initialized() || ctx.doUpdateMatrixCoefficients())
+        {
             Amat.applyPermutation(matrix_);
-	}
-    }
-    else
+        }
+    } else
     {
         if (!ctx.initialized()) 
-	{
+        {
             amgx.initialiseMatrixComms(&Amat);
-	}
+        }
 
-	if (!ctx.initialized() || ctx.doUpdateMatrixCoefficients())
+	    if (!ctx.initialized() || ctx.doUpdateMatrixCoefficients())
         {
             Amat.applyPermutation(matrix_, interfaceBouCoeffs_);
-	}
+	    }
     }
 
     if (!ctx.initialized())
@@ -124,15 +130,14 @@ Foam::solverPerformance Foam::AmgXSolver::solve
         Info << "Initializing AmgX Linear Solver " << eqName_ << nl;
 
         //- Compute global number of equations
-        const label nGlobalCells = returnReduce(nCells, sumOp<label>());
+        const label nGlobalCells = returnReduce(psi.size(), sumOp<label>());
 
         amgx.setOperator(nGlobalCells, &Amat);
 
         Amat.clearAddressing();
 
         ctx.initialized() = true;
-    }
-    else
+    } else
     {
         if (ctx.doUpdateMatrixCoefficients())	
         {
@@ -144,8 +149,7 @@ Foam::solverPerformance Foam::AmgXSolver::solve
     {
         ctx.updateConfig(controlDict_);
         ctx.updated() = false;
-    }
-    else if(controlDict_.dictName().ends_with("Final"))
+    } else if(controlDict_.dictName().ends_with("Final"))
     {
         ctx.updateConfig(controlDict_);
         ctx.updated() = true;
@@ -172,4 +176,20 @@ Foam::solverPerformance Foam::AmgXSolver::solve
     return ctx.performance_;
 }
 
+// Implement lduMatrix::solver::solve
+Foam::solverPerformance Foam::AmgXSolver::solve
+(
+    scalarField& psi_s,
+    const scalarField& source,
+    const direction cmpt
+) const
+{
+    PrecisionAdaptor<solveScalar, scalar> tpsi(psi_s);
+    return scalarSolve
+    (
+        tpsi.ref(),
+        ConstPrecisionAdaptor<solveScalar, scalar>(source)(),
+        cmpt
+    );
+}
 // ************************************************************************* //
